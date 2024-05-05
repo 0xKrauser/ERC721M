@@ -5,21 +5,12 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
-[submodule "lib/v2-core"]
-	path = lib/v2-core
-	url = https://github.com/uniswap/v2-core
-[submodule "lib/v2-periphery"]
-	path = lib/v2-periphery
-	url = https://github.com/uniswap/v2-periphery
-[submodule "lib/solidity-lib"]
-	path = lib/solidity-lib
-	url = https://github.com/Uniswap/solidity-lib
-[submodule "lib/solmate"]
-	path = lib/solmate
-	url = https://github.com/transmissions11/solmate
-[submodule "lib/AlignmentVault"]
-	path = lib/AlignmentVault
-	url = https://github.com/Zodomo/AlignmentVault
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/AlignmentVault"]
+	path = lib/AlignmentVault
+	url = https://github.com/Zodomo/AlignmentVault
+[submodule "lib/ERC721x"]
+	path = lib/ERC721x
+	url = https://github.com/Zodomo/ERC721x

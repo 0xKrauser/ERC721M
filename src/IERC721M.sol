@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.23;
 
-import "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
-import "./IERC721x.sol";
-import "../lib/openzeppelin-contracts/contracts/interfaces/IERC2981.sol";
+import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
+import {IERC721x} from "../lib/ERC721x/src/interfaces/IERC721x.sol";
+import {IERC2981} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC2981.sol";
 
 /**
  * @title IERC721M

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "../lib/forge-std/src/Test.sol";
-import "../lib/liquidity-helper/UniswapV2LiquidityHelper.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
@@ -10,30 +9,27 @@ import "../lib/solady/src/utils/FixedPointMathLib.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/AlignmentVault/src/IAlignmentVault.sol";
+import "../lib/solady/src/auth/Ownable.sol";
 
 interface IFallback {
     function doesntExist(uint256 _unusedVar) external payable;
 }
 
-contract ERC721MTest is Test, ERC721Holder {
+contract BetaERC721MTest is Test, ERC721Holder {
     using LibString for uint256;
 
     ERC721M public template;
     ERC721M public manualInit;
-    IERC721 public nft = IERC721(0x5Af0D9827E0c53E4799BB226655A1de152A425a5); // Milady NFT
+    IERC721 public nft = IERC721(0xeA9aF8dBDdE2A8d3515C3B4E446eCd41afEdB1C6); // Milady NFT
     MockERC20 public testToken;
     MockERC721 public testNFT;
-    IWETH weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    IERC20 wethToken = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    IUniswapV2Router02 sushiRouter = IUniswapV2Router02(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
-    IERC20 nftxInv = IERC20(0x227c7DF69D3ed1ae7574A1a7685fDEd90292EB48); // NFTX MILADY token
-    IUniswapV2Pair nftWeth = IUniswapV2Pair(0x15A8E38942F9e353BEc8812763fb3C104c89eCf4); // MILADYWETH SLP
 
     function _bytesToAddress(bytes32 fuzzedBytes) internal pure returns (address) {
         return address(uint160(uint256(keccak256(abi.encode(fuzzedBytes)))));
     }
 
     function setUp() public {
+        vm.createSelectFork("sepolia");
         template = new ERC721M();
         manualInit = new ERC721M();
         template.initialize(
@@ -47,7 +43,7 @@ contract ERC721MTest is Test, ERC721Holder {
             address(this),
             address(nft),
             0.01 ether,
-            392
+            21
         );
         template.disableInitializers();
         vm.deal(address(this), 1000 ether);
@@ -59,7 +55,7 @@ contract ERC721MTest is Test, ERC721Holder {
         testNFT.safeMint(address(this), 3);
     }
 
-    function testInitialize(
+    function testInitialize_(
         string memory name,
         string memory symbol,
         string memory baseURI,
@@ -73,15 +69,15 @@ contract ERC721MTest is Test, ERC721Holder {
     ) public {
         vm.assume(bytes(name).length > 0 && bytes(symbol).length > 0 && bytes(baseURI).length > 0 && bytes(contractURI).length > 0);
         address owner = _bytesToAddress(ownerSeed);
-        uint256 _vaultId;
-        if (vaultId) _vaultId = 392;
+        uint96 _vaultId;
+        if (vaultId) _vaultId = 21;
 
         if (allocation < 500) {
             vm.expectRevert(IERC721M.NotAligned.selector);
             manualInit.initialize(name, symbol, baseURI, contractURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId);
             return;
         }
-        else if (allocation > 10000 || royalty > 10000) {
+        else if (allocation > 10000 || royalty > 1000) {
             vm.expectRevert(IERC721M.Invalid.selector);
             manualInit.initialize(name, symbol, baseURI, contractURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId);
             return;
@@ -98,7 +94,8 @@ contract ERC721MTest is Test, ERC721Holder {
         assertEq(royalty, (_royalty * 10000) / 1 ether, "royalty error");
         assertEq(allocation, manualInit.minAllocation(), "allocation error");
         assertEq(owner, manualInit.owner(), "owner error");
-        assertEq(392, IAlignmentVault(manualInit.vault()).vaultId(), "vaultId error");
+        if (vaultId) assertEq(21, IAlignmentVault(manualInit.alignmentVault()).vaultId(), "vaultId error");
+        else assertEq(3, IAlignmentVault(manualInit.alignmentVault()).vaultId(), "vaultId error");
     }
 
     function testSupportsInterface(bytes4 interfaceId) public view {
@@ -126,13 +123,13 @@ contract ERC721MTest is Test, ERC721Holder {
             assertEq(template.balanceOf(caller), 1, "balanceOf error");
             assertEq(template.totalSupply(), 1, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether, "template balance error");
-            assertEq(wethToken.balanceOf(template.vault()), 0.002 ether, "vault balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether, "vault balance error");
         } else {
             template.mint{value: 0.01 ether * amount}(amount);
             assertEq(template.balanceOf(caller), amount, "balanceOf error");
             assertEq(template.totalSupply(), amount, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether * amount, "template balance error");
-            assertEq(wethToken.balanceOf(template.vault()), 0.002 ether * amount, "vault balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether * amount, "vault balance error");
         }
     }
 
@@ -153,13 +150,13 @@ contract ERC721MTest is Test, ERC721Holder {
             assertEq(template.balanceOf(recipient), 1, "balanceOf error");
             assertEq(template.totalSupply(), 1, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether, "template balance error");
-            assertEq(wethToken.balanceOf(template.vault()), 0.002 ether, "vault balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether, "vault balance error");
         } else {
             template.mint{value: 0.01 ether * amount}(recipient, amount, 2000);
             assertEq(template.balanceOf(recipient), amount, "balanceOf error");
             assertEq(template.totalSupply(), amount, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether * amount, "template balance error");
-            assertEq(wethToken.balanceOf(template.vault()), 0.002 ether * amount, "vault balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether * amount, "vault balance error");
         }
     }
 
@@ -191,7 +188,7 @@ contract ERC721MTest is Test, ERC721Holder {
         assertEq(template.totalSupply(), amount, "totalSupply error");
         assertEq(address(referrer).balance, refFee, "referrer balance error");
         assertEq(address(template).balance, (0.008 ether * amount) - refFee, "template balance error");
-        assertEq(wethToken.balanceOf(template.vault()), 0.002 ether * amount, "vault balance error");
+        assertEq(address(template.alignmentVault()).balance, 0.002 ether * amount, "vault balance error");
     }
 
     function testSetReferralFee(uint16 referralFee, uint16 invalidFee) public {
@@ -243,8 +240,8 @@ contract ERC721MTest is Test, ERC721Holder {
     function testSetRoyalties(bytes32 recipientSalt, uint96 royaltyFee, uint96 invalidFee) public {
         vm.assume(recipientSalt != bytes32(""));
         address recipient = _bytesToAddress(recipientSalt);
-        royaltyFee = uint96(bound(royaltyFee, 0, 10000));
-        invalidFee = uint96(bound(invalidFee, 10001, type(uint96).max));
+        royaltyFee = uint96(bound(royaltyFee, 0, 1000));
+        invalidFee = uint96(bound(invalidFee, 1001, type(uint96).max));
 
         template.setRoyalties(recipient, royaltyFee);
 
@@ -263,8 +260,8 @@ contract ERC721MTest is Test, ERC721Holder {
         tokenId = bound(tokenId, 1, type(uint40).max);
         vm.assume(recipientSalt != bytes32(""));
         address recipient = _bytesToAddress(recipientSalt);
-        royaltyFee = uint96(bound(royaltyFee, 1, 10000));
-        invalidFee = uint96(bound(invalidFee, 10001, type(uint96).max));
+        royaltyFee = uint96(bound(royaltyFee, 1, 1000));
+        invalidFee = uint96(bound(invalidFee, 1001, type(uint96).max));
 
         template.setRoyaltiesForId(tokenId, recipient, royaltyFee);
 
@@ -287,12 +284,6 @@ contract ERC721MTest is Test, ERC721Holder {
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(tokenId, 1 ether);
         assertEq(recipient, address(0), "royalty recipient error");
         assertEq(royalty, 0, "royalty fee error");
-    }
-
-    function testSetBlacklist(address[] memory blacklist) public {
-        template.setBlacklist(blacklist);
-        address[] memory storedBlacklist = template.getBlacklist();
-        assertEq(abi.encode(blacklist), abi.encode(storedBlacklist), "blacklist error");
     }
 
     function testOpenMint() public {

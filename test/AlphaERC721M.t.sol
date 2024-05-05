@@ -2,32 +2,25 @@
 pragma solidity ^0.8.20;
 
 import "../lib/forge-std/src/Test.sol";
-import "../lib/liquidity-helper/UniswapV2LiquidityHelper.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
+import "../lib/AlignmentVault/src/IAlignmentVault.sol";
+import "../lib/solady/src/auth/Ownable.sol";
 
-interface IFallback {
-    function doesntExist(uint256 _unusedVar) external payable;
-}
-
-contract ERC721MTest is Test, ERC721Holder {
+contract AlphaERC721MTest is Test, ERC721Holder {
     using LibString for uint256;
 
     ERC721M public template;
     ERC721M public manualInit;
-    IERC721 public nft = IERC721(0x5Af0D9827E0c53E4799BB226655A1de152A425a5); // Milady NFT
+    IERC721 public nft = IERC721(0xeA9aF8dBDdE2A8d3515C3B4E446eCd41afEdB1C6); // Milady NFT
     MockERC20 public testToken;
     MockERC721 public testNFT;
-    IWETH weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    IERC20 wethToken = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    IUniswapV2Router02 sushiRouter = IUniswapV2Router02(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
-    IERC20 nftxInv = IERC20(0x227c7DF69D3ed1ae7574A1a7685fDEd90292EB48); // NFTX MILADY token
-    IUniswapV2Pair nftWeth = IUniswapV2Pair(0x15A8E38942F9e353BEc8812763fb3C104c89eCf4); // MILADYWETH SLP
 
     function setUp() public {
+        vm.createSelectFork("sepolia");
         template = new ERC721M();
         template.initialize(
             "ERC721M Test",
@@ -40,7 +33,7 @@ contract ERC721MTest is Test, ERC721Holder {
             address(this),
             address(nft),
             0.01 ether,
-            392
+            21
         );
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
@@ -64,14 +57,14 @@ contract ERC721MTest is Test, ERC721Holder {
             address(this),
             address(nft),
             0.01 ether,
-            392
+            21
         );
         manualInit.disableInitializers();
         require(manualInit.minAllocation() == 2000);
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(0, 1 ether);
         require(recipient == address(this));
         require(royalty == 0.05 ether);
-        require(manualInit.alignedNft() == address(nft));
+        require(IAlignmentVault(manualInit.alignmentVault()).alignedNft() == address(nft));
         require(manualInit.owner() == address(this));
         require(keccak256(abi.encodePacked(manualInit.name())) == keccak256(abi.encodePacked("ERC721M Test")));
         require(keccak256(abi.encodePacked(manualInit.symbol())) == keccak256(abi.encodePacked("ERC721M")));
@@ -100,7 +93,7 @@ contract ERC721MTest is Test, ERC721Holder {
             address(this),
             address(nft),
             0.01 ether,
-            392
+            21
         );
     }
 
@@ -118,7 +111,7 @@ contract ERC721MTest is Test, ERC721Holder {
             address(this),
             address(nft),
             0.01 ether,
-            392
+            21
         );
         vm.expectRevert(ERC721M.Invalid.selector);
         manualInit.initialize(
@@ -132,7 +125,7 @@ contract ERC721MTest is Test, ERC721Holder {
             address(this),
             address(nft),
             0.01 ether,
-            392
+            21
         );
     }
 
@@ -238,96 +231,6 @@ contract ERC721MTest is Test, ERC721Holder {
         template.mint{value: 0.01 ether * 101}(address(this), 101, 2000);
     }
 
-    function testFixInventory() public {
-        vm.startPrank(nft.ownerOf(42));
-        nft.approve(address(this), 42);
-        nft.transferFrom(nft.ownerOf(42), address(template), 42);
-        vm.stopPrank();
-        uint256[] memory tokenIds = new uint256[](1);
-        tokenIds[0] = 42;
-        template.fixInventory(tokenIds);
-        require(nft.balanceOf(address(template)) == 0);
-        require(nft.balanceOf(address(template.vault())) == 1);
-    }
-
-    function testCheckInventory() public {
-        vm.startPrank(nft.ownerOf(42));
-        nft.approve(address(this), 42);
-        nft.transferFrom(nft.ownerOf(42), address(template.vault()), 42);
-        vm.stopPrank();
-        vm.deal(address(template.vault()), 10 ether);
-        template.alignMaxLiquidity();
-        require(nft.balanceOf(address(template.vault())) == 1);
-        uint256[] memory tokenIds = new uint256[](1);
-        tokenIds[0] = 42;
-        template.checkInventory(tokenIds);
-        vm.deal(address(template.vault()), 10 ether);
-        template.alignMaxLiquidity();
-        require(nft.balanceOf(address(template.vault())) == 0);
-    }
-
-    function testAlignMaxLiquidityNoLiquidity() public {
-        template.alignMaxLiquidity();
-    }
-
-    function testAlignMaxLiquidityETH() public {
-        address vault = address(template.vault());
-        vm.deal(vault, 1 ether);
-        require(address(vault).balance == 1 ether);
-        template.alignMaxLiquidity();
-        require(address(vault).balance == 0, "eth balance error");
-    }
-
-    function testClaimYieldNone() public {
-        template.claimYield(address(this));
-    }
-
-    function testCompoundYieldNone() public {
-        template.claimYield(address(0));
-    }
-
-    function testClaimYieldNoneRenounced() public {
-        template.renounceOwnership();
-        template.claimYield(address(this));
-    }
-
-    function testCompoundYieldNoneRenounced() public {
-        template.renounceOwnership();
-        template.claimYield(address(0));
-    }
-
-    function testClaimYieldRevertUnauthorized() public {
-        vm.prank(address(1));
-        vm.expectRevert(Ownable.Unauthorized.selector);
-        template.claimYield(address(1));
-    }
-
-    function testClaimYieldGenerated() public {
-        vm.deal(address(template.vault()), 100 ether);
-        template.alignMaxLiquidity();
-        weth.deposit{value: 100 ether}();
-        wethToken.approve(address(sushiRouter), type(uint256).max);
-        nftxInv.approve(address(sushiRouter), type(uint256).max);
-        address[] memory path = new address[](2);
-        uint256 balance;
-        for (uint256 i; i < 10; ++i) {
-            balance = wethToken.balanceOf(address(this));
-            path[0] = address(weth);
-            path[1] = address(nftxInv);
-            sushiRouter.swapExactTokensForTokens(balance, 1, path, address(this), block.timestamp);
-            uint256 nftxBal = nftxInv.balanceOf(address(this));
-            path[0] = address(nftxInv);
-            path[1] = address(weth);
-            sushiRouter.swapExactTokensForTokens(nftxBal, 1, path, address(this), block.timestamp);
-        }
-        balance = wethToken.balanceOf(address(this));
-        path[0] = address(weth);
-        path[1] = address(nftxInv);
-        sushiRouter.swapExactTokensForTokens(balance, 1, path, address(template.vault()), block.timestamp);
-        template.claimYield(address(this));
-        require(nftxInv.balanceOf(address(this)) > 0, "nftxInv claim balance error");
-    }
-
     function testRescueERC20() public {
         testToken.transfer(address(template), 1 ether);
         template.rescueERC20(address(testToken), address(42));
@@ -340,19 +243,13 @@ contract ERC721MTest is Test, ERC721Holder {
         require(testNFT.ownerOf(1) == address(42));
     }
 
-    function testRescueERC721Vault() public {
-        testNFT.transferFrom(address(this), address(template.vault()), 1);
-        template.rescueERC721(address(testNFT), address(42), 1);
-        require(testNFT.ownerOf(1) == address(42));
-    }
-
     function testRescueERC721AlignedAsset() public {
         vm.startPrank(nft.ownerOf(42));
         nft.approve(address(this), 42);
         nft.transferFrom(nft.ownerOf(42), address(template), 42);
         vm.stopPrank();
         template.rescueERC721(address(nft), address(42), 42);
-        require(nft.ownerOf(42) == address(template.vault()));
+        require(nft.ownerOf(42) == address(template.alignmentVault()));
     }
 
     function testWithdrawFunds() public {
@@ -368,7 +265,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.mint{value: 0.01 ether}(address(42), 1, 2000);
         template.renounceOwnership();
         template.withdrawFunds(address(69), 0.0000001 ether);
-        require(wethToken.balanceOf(template.vault()) == 0.01 ether);
+        require(address(template.alignmentVault()).balance == 0.01 ether);
     }
 
     function testWithdrawFundsRevertUnauthorized() public {
@@ -382,12 +279,7 @@ contract ERC721MTest is Test, ERC721Holder {
     function testReceive() public {
         (bool success,) = payable(address(template)).call{value: 1 ether}("");
         require(success);
-        require(wethToken.balanceOf(address(template.vault())) == 1 ether);
-    }
-
-    function testFallback() public {
-        IFallback(address(template)).doesntExist{value: 1 ether}(420);
-        require(wethToken.balanceOf(address(template.vault())) == 1 ether);
+        require(address(template.alignmentVault()).balance == 1 ether);
     }
 
     function testOnERC721Received() public {
@@ -395,7 +287,7 @@ contract ERC721MTest is Test, ERC721Holder {
         nft.approve(address(this), 42);
         nft.safeTransferFrom(nft.ownerOf(42), address(template), 42);
         vm.stopPrank();
-        require(nft.ownerOf(42) == address(template.vault()), "NFT redirection failed");
+        require(nft.ownerOf(42) == address(template.alignmentVault()), "NFT redirection failed");
     }
 
     function testOnERC721ReceivedRevertNotAligned() public {
@@ -405,7 +297,7 @@ contract ERC721MTest is Test, ERC721Holder {
 
     function testProcessPayment() public {
         template.openMint();
-        IFallback(address(template)).doesntExist{value: 1 ether}(420);
+        address(template).call{value: 1 ether}("");
         require(template.balanceOf(address(this)) > 0);
     }
 
@@ -426,7 +318,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
-        vm.expectRevert(IERC721x.TokenLock.selector);
+        vm.expectRevert(abi.encodeWithSelector(IERC721x.Locked.selector, 1));
         template.transferFrom(address(this), address(42), 1);
     }
 
@@ -447,7 +339,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
-        vm.expectRevert(IERC721x.TokenLock.selector);
+        vm.expectRevert(abi.encodeWithSelector(IERC721x.Locked.selector, 1));
         template.safeTransferFrom(address(this), address(42), 1, bytes("milady"));
     }
 
@@ -469,7 +361,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.lockId(1);
     }
 
-    function testLockIdRevertNotApprovedLocker() public {
+    function testLockIdRevertNotApprovedContract() public {
         address[] memory approved = new address[](1);
         approved[0] = address(42);
         bool[] memory status = new bool[](1);
@@ -478,7 +370,7 @@ contract ERC721MTest is Test, ERC721Holder {
 
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
-        vm.expectRevert(LockRegistry.NotApprovedLocker.selector);
+        vm.expectRevert(IERC721x.NotApprovedContract.selector);
         template.lockId(1);
     }
 
@@ -492,7 +384,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
-        vm.expectRevert(LockRegistry.AlreadyLocked.selector);
+        vm.expectRevert(IERC721x.AlreadyLocked.selector);
         template.lockId(1);
     }
 
@@ -535,7 +427,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.unlockId(1);
     }
 
-    function testUnlockIdRevertNotApprovedLocker() public {
+    function testUnlockIdRevertNotApprovedContract() public {
         address[] memory approved = new address[](1);
         approved[0] = address(42);
         bool[] memory status = new bool[](1);
@@ -544,7 +436,7 @@ contract ERC721MTest is Test, ERC721Holder {
 
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
-        vm.expectRevert(LockRegistry.NotApprovedLocker.selector);
+        vm.expectRevert(IERC721x.NotApprovedContract.selector);
         template.unlockId(1);
     }
 
@@ -557,7 +449,7 @@ contract ERC721MTest is Test, ERC721Holder {
 
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
-        vm.expectRevert(LockRegistry.TokenNotLocked.selector);
+        vm.expectRevert(IERC721x.NotLocked.selector);
         template.unlockId(1);
     }
 
@@ -608,7 +500,7 @@ contract ERC721MTest is Test, ERC721Holder {
         template.freeId(1, address(this));
     }
 
-    function testFreeIdRevertLockerStillApproved() public {
+    function testFreeIdRevertApprovedContract() public {
         address[] memory approved = new address[](1);
         approved[0] = address(this);
         bool[] memory status = new bool[](1);
@@ -618,14 +510,14 @@ contract ERC721MTest is Test, ERC721Holder {
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
-        vm.expectRevert(LockRegistry.LockerStillApproved.selector);
+        vm.expectRevert(IERC721x.ApprovedContract.selector);
         template.freeId(1, address(this));
     }
 
-    function testFreeIdRevertTokenNotLocked() public {
+    function testFreeIdRevertNotLocked() public {
         template.openMint();
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
-        vm.expectRevert(LockRegistry.TokenNotLocked.selector);
+        vm.expectRevert(IERC721x.NotLocked.selector);
         template.freeId(1, address(this));
     }
 
@@ -636,7 +528,7 @@ contract ERC721MTest is Test, ERC721Holder {
         bool[] memory values = new bool[](1);
         values[0] = true;
 
-        vm.expectRevert(LockRegistry.ArrayLengthMismatch.selector);
+        vm.expectRevert(IERC721x.ArrayLengthMismatch.selector);
         template.updateApprovedContracts(contracts, values);
     }
 }
