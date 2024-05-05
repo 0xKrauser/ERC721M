@@ -7,7 +7,6 @@ import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
-import "../lib/AlignmentVault/src/IAlignmentVault.sol";
 import "../lib/solady/src/auth/Ownable.sol";
 
 contract AlphaERC721MTest is Test, ERC721Holder {
@@ -64,7 +63,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(0, 1 ether);
         require(recipient == address(this));
         require(royalty == 0.05 ether);
-        require(IAlignmentVault(manualInit.alignmentVault()).alignedNft() == address(nft));
+        require(IAlignmentVaultMinimal(manualInit.alignmentVault()).alignedNft() == address(nft));
         require(manualInit.owner() == address(this));
         require(keccak256(abi.encodePacked(manualInit.name())) == keccak256(abi.encodePacked("ERC721M Test")));
         require(keccak256(abi.encodePacked(manualInit.symbol())) == keccak256(abi.encodePacked("ERC721M")));
@@ -159,8 +158,8 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         );
     }
 
-    function testTokenURIRevertNotMinted() public {
-        vm.expectRevert(ERC721M.NotMinted.selector);
+    function testTokenURIRevertTokenDoesNotExist() public {
+        vm.expectRevert(ERC721.TokenDoesNotExist.selector);
         template.tokenURI(1);
     }
 

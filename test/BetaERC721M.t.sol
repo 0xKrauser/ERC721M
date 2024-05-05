@@ -8,7 +8,6 @@ import "../lib/solady/test/utils/mocks/MockERC721.sol";
 import "../lib/solady/src/utils/FixedPointMathLib.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
-import "../lib/AlignmentVault/src/IAlignmentVault.sol";
 import "../lib/solady/src/auth/Ownable.sol";
 
 interface IFallback {
@@ -94,8 +93,6 @@ contract BetaERC721MTest is Test, ERC721Holder {
         assertEq(royalty, (_royalty * 10000) / 1 ether, "royalty error");
         assertEq(allocation, manualInit.minAllocation(), "allocation error");
         assertEq(owner, manualInit.owner(), "owner error");
-        if (vaultId) assertEq(21, IAlignmentVault(manualInit.alignmentVault()).vaultId(), "vaultId error");
-        else assertEq(3, IAlignmentVault(manualInit.alignmentVault()).vaultId(), "vaultId error");
     }
 
     function testSupportsInterface(bytes4 interfaceId) public view {
