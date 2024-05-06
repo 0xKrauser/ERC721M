@@ -31,6 +31,7 @@ interface IAlignmentVaultMinimal {
 
 interface IFactory {
     function deploy(address alignedNft, uint96 vaultId) external returns (address);
+    function deployDeterministic(address alignedNft, uint96 vaultId, bytes32 salt) external returns (address);
 }
 
 /**
@@ -131,14 +132,14 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         string memory name_, // Collection name ("Milady")
         string memory symbol_, // Collection symbol ("MIL")
         string memory baseURI_, // ipfs://...
-        string memory contractURI_, // ipfs://...
         uint40 _maxSupply, // Max supply (~1.099T max)
         uint16 _royalty, // Percentage in basis points (420 == 4.20%)
         uint16 _allocation, // Minimum Percentage of mint funds to AlignmentVault in basis points, minimum of 5% (777 == 7.77%)
         address _owner, // Collection contract owner
         address _alignedNft, // Address of NFT to configure AlignmentVault for, must have NFTX vault!
         uint80 _price, // Price (~1.2M ETH max)
-        uint96 _vaultId // NFTX Vault ID, please check!
+        uint96 _vaultId, // NFTX Vault ID, please check!
+        bytes32 _salt // AV Deployment salt
     ) external payable virtual initializer {
         // Confirm mint alignment allocation is within valid range
         if (_allocation < 500) revert NotAligned(); // Require allocation be >= 5%
@@ -153,11 +154,12 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         _name = name_;
         _symbol = symbol_;
         _baseURI = baseURI_;
-        _contractURI = contractURI_;
         maxSupply = _maxSupply;
         price = _price;
         // Deploy AlignmentVault
-        address deployedAV = IFactory(vaultFactory).deploy(_alignedNft, _vaultId);
+        address deployedAV;
+        if (_salt == bytes32("")) deployedAV = IFactory(vaultFactory).deploy(_alignedNft, _vaultId);
+        else deployedAV = IFactory(vaultFactory).deployDeterministic(_alignedNft, _vaultId, _salt);
         alignmentVault = deployedAV;
         // Send initialize payment (if any) to vault
         if (msg.value > 0) {
@@ -187,7 +189,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     function contractURI() public view virtual returns (string memory) {
-        return _contractURI;
+        return LibString.concat(_baseURI, "contract.json");
     }
 
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
@@ -347,13 +349,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         if (uriLocked) revert URILocked();
         _baseURI = newBaseURI;
         emit BatchMetadataUpdate(0, maxSupply);
-    }
-
-    // Adjust contractURI if necessary
-    function setContractURI(string memory newContractURI) external virtual onlyOwner {
-        if (uriLocked) revert URILocked();
-        _contractURI = newContractURI;
-        emit ContractMetadataUpdate(newContractURI);
     }
 
     // Permanently lock collection URI

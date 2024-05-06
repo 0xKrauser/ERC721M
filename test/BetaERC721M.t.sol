@@ -35,14 +35,14 @@ contract BetaERC721MTest is Test, ERC721Holder {
             "ERC721M Test",
             "ERC721M",
             "https://miya.wtf/api/",
-            "https://miya.wtf/contract.json",
             100,
             500,
             2000,
             address(this),
             address(nft),
             0.01 ether,
-            21
+            21,
+            bytes32("")
         );
         template.disableInitializers();
         vm.deal(address(this), 1000 ether);
@@ -58,7 +58,6 @@ contract BetaERC721MTest is Test, ERC721Holder {
         string memory name,
         string memory symbol,
         string memory baseURI,
-        string memory contractURI,
         uint40 maxSupply,
         uint16 royalty,
         uint16 allocation,
@@ -66,28 +65,27 @@ contract BetaERC721MTest is Test, ERC721Holder {
         uint80 price,
         bool vaultId
     ) public {
-        vm.assume(bytes(name).length > 0 && bytes(symbol).length > 0 && bytes(baseURI).length > 0 && bytes(contractURI).length > 0);
+        vm.assume(bytes(name).length > 0 && bytes(symbol).length > 0 && bytes(baseURI).length > 0);
         address owner = _bytesToAddress(ownerSeed);
         uint96 _vaultId;
         if (vaultId) _vaultId = 21;
 
         if (allocation < 500) {
             vm.expectRevert(IERC721M.NotAligned.selector);
-            manualInit.initialize(name, symbol, baseURI, contractURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId);
+            manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
             return;
         }
         else if (allocation > 10000 || royalty > 1000) {
             vm.expectRevert(IERC721M.Invalid.selector);
-            manualInit.initialize(name, symbol, baseURI, contractURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId);
+            manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
             return;
         }
-        manualInit.initialize(name, symbol, baseURI, contractURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId);
+        manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
         manualInit.disableInitializers();
 
         assertEq(abi.encode(name), abi.encode(manualInit.name()), "name error");
         assertEq(abi.encode(symbol), abi.encode(manualInit.symbol()), "symbol error");
         assertEq(abi.encode(baseURI), abi.encode(manualInit.baseURI()), "baseURI error");
-        assertEq(abi.encode(contractURI), abi.encode(manualInit.contractURI()), "contractURI error");
         assertEq(maxSupply, manualInit.maxSupply(), "maxSupply error");
         (, uint256 _royalty) = manualInit.royaltyInfo(0, 1 ether);
         assertEq(royalty, (_royalty * 10000) / 1 ether, "royalty error");
@@ -210,18 +208,6 @@ contract BetaERC721MTest is Test, ERC721Holder {
         template.lockURI();
         vm.expectRevert(IERC721M.URILocked.selector);
         template.setBaseURI(baseURI);
-    }
-
-    function testSetContractURI(string memory contractURI) public {
-        vm.assume(bytes(contractURI).length > 0);
-
-        template.setContractURI(contractURI);
-
-        assertEq(template.contractURI(), contractURI, "contractURI error");
-
-        template.lockURI();
-        vm.expectRevert(IERC721M.URILocked.selector);
-        template.setContractURI(contractURI);
     }
 
     function testLockURI() public {

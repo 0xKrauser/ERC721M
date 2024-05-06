@@ -25,14 +25,14 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             "ERC721M Test",
             "ERC721M",
             "https://miya.wtf/api/",
-            "https://miya.wtf/contract.json",
             100,
             500,
             2000,
             address(this),
             address(nft),
             0.01 ether,
-            21
+            21,
+            bytes32("")
         );
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
@@ -49,14 +49,14 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             "ERC721M Test",
             "ERC721M",
             "https://miya.wtf/api/",
-            "https://miya.wtf/contract.json",
             100,
             500,
             2000,
             address(this),
             address(nft),
             0.01 ether,
-            21
+            21,
+            bytes32("")
         );
         manualInit.disableInitializers();
         require(manualInit.minAllocation() == 2000);
@@ -85,14 +85,14 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             "ERC721M Test",
             "ERC721M",
             "https://miya.wtf/api/",
-            "https://miya.wtf/contract.json",
             100,
             500,
             250,
             address(this),
             address(nft),
             0.01 ether,
-            21
+            21,
+            bytes32("")
         );
     }
 
@@ -103,28 +103,28 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             "ERC721M Test",
             "ERC721M",
             "https://miya.wtf/api/",
-            "https://miya.wtf/contract.json",
             100,
             500,
             10001,
             address(this),
             address(nft),
             0.01 ether,
-            21
+            21,
+            bytes32("")
         );
         vm.expectRevert(ERC721M.Invalid.selector);
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
             "https://miya.wtf/api/",
-            "https://miya.wtf/contract.json",
             100,
             10001,
             2000,
             address(this),
             address(nft),
             0.01 ether,
-            21
+            21,
+            bytes32("")
         );
     }
 
@@ -143,7 +143,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     function testContractURI() public view {
         require(
             keccak256(abi.encodePacked(template.contractURI()))
-                == keccak256(abi.encodePacked("https://miya.wtf/contract.json"))
+                == keccak256(abi.encodePacked("https://miya.wtf/api/contract.json"))
         );
     }
 
