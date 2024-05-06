@@ -91,8 +91,8 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
     address public constant vaultFactory = 0xe3d5e8e972291bDbdA57159481028A77fb8F055A;
-    uint16 private constant _MAX_ROYALTY_BPS = 1000;
-    uint16 private constant _DENOMINATOR_BPS = 10000;
+    uint16 internal constant _MAX_ROYALTY_BPS = 1000;
+    uint16 internal constant _DENOMINATOR_BPS = 10000;
 
     EnumerableSetLib.AddressSet internal _blacklist;
     EnumerableSetLib.Uint256Set internal _customMintLists;
