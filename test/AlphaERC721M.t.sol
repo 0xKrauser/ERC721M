@@ -43,7 +43,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         testNFT.safeMint(address(this), 3);
     }
 
-    function testInitialize() public {
+    function testInitialize__() public {
         manualInit = new ERC721M();
         manualInit.initialize(
             "ERC721M Test",
@@ -72,7 +72,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         );
         require(
             keccak256(abi.encodePacked(manualInit.contractURI()))
-                == keccak256(abi.encodePacked("https://miya.wtf/contract.json"))
+                == keccak256(abi.encodePacked("https://miya.wtf/api/contract.json"))
         );
         require(manualInit.maxSupply() == 100);
         require(manualInit.price() == 0.01 ether);

@@ -30,8 +30,8 @@ interface IAlignmentVaultMinimal {
 }
 
 interface IFactory {
-    function deploy(address alignedNft, uint96 vaultId) external returns (address);
-    function deployDeterministic(address alignedNft, uint96 vaultId, bytes32 salt) external returns (address);
+    function deploy(address vaultOwner, address alignedNft, uint96 vaultId) external returns (address);
+    function deployDeterministic(address vaultOwner, address alignedNft, uint96 vaultId, bytes32 salt) external returns (address);
 }
 
 /**
@@ -91,7 +91,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
-    address public constant vaultFactory = 0xe3d5e8e972291bDbdA57159481028A77fb8F055A;
+    address public constant vaultFactory = 0x9c9F968d36AacD2911b668DA9D2b277Dd783Ad8E;
     uint16 internal constant _MAX_ROYALTY_BPS = 1000;
     uint16 internal constant _DENOMINATOR_BPS = 10000;
 
@@ -158,8 +158,8 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         price = _price;
         // Deploy AlignmentVault
         address deployedAV;
-        if (_salt == bytes32("")) deployedAV = IFactory(vaultFactory).deploy(_alignedNft, _vaultId);
-        else deployedAV = IFactory(vaultFactory).deployDeterministic(_alignedNft, _vaultId, _salt);
+        if (_salt == bytes32("")) deployedAV = IFactory(vaultFactory).deploy(_owner, _alignedNft, _vaultId);
+        else deployedAV = IFactory(vaultFactory).deployDeterministic(_owner, _alignedNft, _vaultId, _salt);
         alignmentVault = deployedAV;
         // Send initialize payment (if any) to vault
         if (msg.value > 0) {
@@ -217,14 +217,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // >>>>>>>>>>>> [ INTERNAL FUNCTIONS ] <<<<<<<<<<<<
 
-    // Simple ownership check to reduce code reuse
-    function _checkOwnership() internal virtual {
-        // Cache owner address to save gas
-        address owner = owner();
-        // If contract is owned and caller isn't them, revert. If renounced, still process vault action.
-        if (owner != address(0) && owner != msg.sender) revert Unauthorized();
-    }
-
     // Blacklist function to prevent mints to and from holders of prohibited assets, applied even if recipient isn't minter
     function _enforceBlacklist(address minter, address recipient) internal virtual {
         address[] memory blacklist = _blacklist.values();
@@ -257,7 +249,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             payable(alignmentVault).call{value: mintAlloc}("");
             // If referral isn't address(0), process sending referral fee
             // Reentrancy is handled by applying ReentrancyGuard to referral mint function [mint(address, uint256, address)]
-            if (referral != address(0)) {
+            if (referral != address(0) && referral != msg.sender) {
                 uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
                 (bool success, ) = payable(referral).call{value: referralAlloc}("");
                 if (!success) revert TransferFailed();
@@ -320,7 +312,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     // Whitelisted mint using merkle proofs
     function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) public payable virtual mintable(amount) nonReentrant {
         if (!_customMintLists.contains(listId)) revert Invalid();
-        CustomMint storage mintData = customMintData[listId];
+        CustomMint memory mintData = customMintData[listId];
         if (amount > mintData.supply) revert MintCap();
         if (customClaims[msg.sender][listId] + amount > mintData.claimable) revert ExcessiveClaim();
         if (msg.value < amount * mintData.price) revert InsufficientPayment();
@@ -330,7 +322,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
         unchecked {
             customClaims[msg.sender][listId] += amount;
-            mintData.supply -= amount;
+            customMintData[listId].supply -= amount;
         }
         _mint(recipient, amount, referral, minAllocation);
     }

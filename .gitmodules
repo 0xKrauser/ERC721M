@@ -11,3 +11,7 @@
 [submodule "lib/ERC721x"]
 	path = lib/ERC721x
 	url = https://github.com/Zodomo/ERC721x
+[submodule "lib/AlignmentVault"]
+	path = lib/AlignmentVault
+	url = https://github.com/Zodomo/AlignmentVault
+	branch = nftxv3-redesign

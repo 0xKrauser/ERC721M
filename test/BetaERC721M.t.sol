@@ -9,6 +9,7 @@ import "../lib/solady/src/utils/FixedPointMathLib.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/solady/src/auth/Ownable.sol";
+import "../lib/AlignmentVault/src/IAlignmentVault.sol";
 
 interface IFallback {
     function doesntExist(uint256 _unusedVar) external payable;
@@ -344,5 +345,12 @@ contract BetaERC721MTest is Test, ERC721Holder {
         assertEq(address(recipient).balance, 0.001 ether, "partial recipient balance error");
         template.withdrawFunds(recipient, type(uint256).max);
         assertEq(address(recipient).balance, 0.008 ether * amount, "full recipient balance error");
+    }
+
+    function testFallback() public {
+        address av = template.alignmentVault();
+        payable(av).call{value: 1 ether}("");
+        Ownable(av).transferOwnership(address(template));
+        IAlignmentVault(address(template)).wrapEth(1 ether);
     }
 }
