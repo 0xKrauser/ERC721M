@@ -166,6 +166,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             (bool success,) = payable(deployedAV).call{ value: msg.value }("");
             if (!success) revert TransferFailed();
         }
+        emit AlignmentUpdate(_allocation, _allocation);
     }
 
     // Disables further initialization, it is best practice to use this post-initialization
