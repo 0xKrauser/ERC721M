@@ -43,7 +43,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         testNFT.safeMint(address(this), 3);
     }
 
-    function testInitialize__() public {
+    function testInitialize() public {
         manualInit = new ERC721M();
         manualInit.initialize(
             "ERC721M Test",
@@ -58,7 +58,6 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
-        manualInit.disableInitializers();
         require(manualInit.minAllocation() == 2000);
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(0, 1 ether);
         require(recipient == address(this));

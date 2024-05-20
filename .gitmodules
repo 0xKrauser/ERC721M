@@ -15,3 +15,6 @@
 	path = lib/AlignmentVault
 	url = https://github.com/Zodomo/AlignmentVault
 	branch = nftxv3-redesign
+[submodule "lib/murky"]
+	path = lib/murky
+	url = https://github.com/dmfxyz/murky

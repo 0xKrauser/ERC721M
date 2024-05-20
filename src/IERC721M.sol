@@ -12,13 +12,13 @@ import {IERC2981} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC2
 interface IERC721M is IERC721, IERC721x, IERC2981 {
     error Invalid();
     error MintCap();
-    error Overdraft();
     error URILocked();
-    error NotMinted();
     error NotAligned();
     error MintClosed();
     error Blacklisted();
     error TransferFailed();
+    error NothingToClaim();
+    error ExcessiveClaim();
     error RoyaltiesDisabled();
     error InsufficientPayment();
 
@@ -26,62 +26,82 @@ interface IERC721M is IERC721, IERC721x, IERC2981 {
 
     event URILock();
     event MintOpen();
+    event RoyaltyDisabled();
     event Withdraw(address indexed to, uint256 indexed amount);
     event PriceUpdate(uint80 indexed price);
     event SupplyUpdate(uint40 indexed supply);
     event AlignmentUpdate(uint16 indexed minAllocation, uint16 indexed maxAllocation);
-    event BlacklistUpdate(address[] indexed blacklist);
+    event BlacklistUpdate(address[] indexed blacklistedAssets, bool indexed status);
     event ReferralFeePaid(address indexed referral, uint256 indexed amount);
     event ReferralFeeUpdate(uint16 indexed referralFee);
     event BatchMetadataUpdate(uint256 indexed fromTokenId, uint256 indexed toTokenId);
+    event ContractMetadataUpdate(string indexed uri);
     event RoyaltyUpdate(uint256 indexed tokenId, address indexed receiver, uint96 indexed royaltyFee);
-    event RoyaltyDisabled();
+    event CustomMinted(address indexed minter, uint8 indexed listId, uint40 indexed amount);
+    event CustomMintDeleted(uint8 indexed listId);
+    event CustomMintDisabled(uint8 indexed listId);
+    event CustomMintRepriced(uint8 indexed listId, uint80 indexed price);
+    event CustomMintReenabled(uint8 indexed listId, uint40 indexed claimable);
+    event CustomMintConfigured(bytes32 indexed root, uint8 indexed listId, uint40 indexed amount);
 
-    function name() external view returns (string memory);
-    function symbol() external view returns (string memory);
-    function baseURI() external view returns (string memory);
-    function contractURI() external view returns (string memory);
-    function tokenURI(uint256 _tokenId) external view returns (string memory);
-    function maxSupply() external view returns (uint40);
-    function totalSupply() external view returns (uint256);
-    function price() external view returns (uint256);
+    struct CustomMint {
+        bytes32 root;
+        uint40 issued;
+        uint40 claimable;
+        uint40 supply;
+        uint80 price;
+    }
 
-    function vaultFactory() external view returns (address);
-    function uriLocked() external view returns (bool);
-    function mintOpen() external view returns (bool);
-    function alignedNft() external view returns (address);
-    function minAllocation() external view returns (uint16);
-    function maxAllocation() external view returns (uint16);
-    function blacklist(uint256 _index) external view returns (address);
+    function name() external view returns (string memory);//
+    function symbol() external view returns (string memory);//
+    function baseURI() external view returns (string memory);//
+    function contractURI() external view returns (string memory);//
+    function tokenURI(uint256 tokenId) external view returns (string memory);//
+    function maxSupply() external view returns (uint40);//
+    function totalSupply() external view returns (uint256);//
+    function price() external view returns (uint256);//
 
-    function setReferralFee(uint16 _referralFee) external;
-    function setBaseURI(string memory _baseURI) external;
-    function lockURI() external;
-    function setPrice(uint256 _price) external;
-    function setRoyalties(address _recipient, uint96 _royaltyFee) external;
-    function setRoyaltiesForId(uint256 _tokenId, address _recipient, uint96 _royaltyFee) external;
-    function disableRoyalties() external;
+    function vaultFactory() external view returns (address);//
+    function uriLocked() external view returns (bool);//
+    function mintOpen() external view returns (bool);//
+    function alignmentVault() external view returns (address);//
+    function minAllocation() external view returns (uint16);//
+    function maxAllocation() external view returns (uint16);//
+    function referralFee() external view returns (uint16);//
+    function getBlacklist() external view returns (address[] memory);//
+    function getCustomMintListIds() external view returns (uint256[] memory);//
+    function customMintData(uint8 listId) external view returns (CustomMint memory);//
+    function customClaims(address user, uint8 listId) external view returns (uint256 claimed);//
+
+    function setReferralFee(uint16 newReferralFee) external;
+    function setBaseURI(string memory newBaseURI) external;
+    function setPrice(uint256 newPrice) external;
+    function setRoyalties(address recipient, uint96 royaltyFee) external;
+    function setRoyaltiesForId(uint256 tokenId, address recipient, uint96 royaltyFee) external;
     function setBlacklist(address[] memory _blacklist) external;
+
+    function setCustomMint(bytes32 root, uint8 listId, uint40 amount, uint40 claimable, uint80 newPrice) external;
+    function disableCustomMint(uint8 listId) external;
+    function reenableCustomMint(uint8 listId, uint40 claimable) external;
+    function repriceCustomMint(uint8 listId, uint80 newPrice) external;
+    function nukeCustomMint(uint8 listId) external;
+
+    function disableRoyalties() external;
+    function lockURI() external;
     function openMint() external;
-    function increaseAlignment(uint16 _minAllocation, uint16 _maxAllocation) external;
-    function decreaseSupply(uint40 _maxSupply) external;
-    function updateApprovedContracts(address[] calldata _contracts, bool[] calldata _values) external;
+    function increaseAlignment(uint16 newMinAllocation, uint16 newMaxAllocation) external;
+    function decreaseSupply(uint40 newMaxSupply) external;
+    function updateApprovedContracts(address[] calldata contracts, bool[] calldata values) external;
 
-    function transferOwnership(address _newOwner) external;
-    function renounceOwnership(address _newOwner) external;
+    function mint() external payable;
+    function mint(uint256 amount) external payable;
+    function mint(address recipient, uint256 amount) external payable;
+    function mint(address recipient, uint256 amount, address referral) external payable;
+    function mint(address recipient, uint256 amount, uint16 allocation) external payable;
+    function mint(address recipient, uint256 amount, address referral, uint16 allocation) external payable;
+    function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) external payable;
 
-    function mint(address _to, uint256 _amount) external payable;
-    function mint(address _to, uint256 _amount, address _referral) external payable;
-    function mint(address _to, uint256 _amount, uint16 _allocation) external payable;
-    function mint(address _to, uint256 _amount, address _referral, uint16 _allocation) external payable;
-
-    function fixInventory(uint256[] memory _tokenIds) external payable;
-    function checkInventory(uint256[] memory _tokenIds) external payable;
-    function alignNfts(uint256[] memory _tokenIds) external payable;
-    function alignTokens(uint256 _amount) external payable;
-    function alignMaxLiquidity() external payable;
-    function claimYield(address _to) external payable;
-    function rescueERC20(address _asset, address _to) external;
-    function rescueERC721(address _asset, address _to, uint256 _tokenId) external;
-    function withdrawFunds(address _to, uint256 _amount) external;
+    function rescueERC20(address addr, address recipient) external;
+    function rescueERC721(address addr, address recipient, uint256 tokenId) external;
+    function withdrawFunds(address to, uint256 amount) external;
 }

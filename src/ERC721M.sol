@@ -74,6 +74,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     event BatchMetadataUpdate(uint256 indexed fromTokenId, uint256 indexed toTokenId);
     event ContractMetadataUpdate(string indexed uri);
     event RoyaltyUpdate(uint256 indexed tokenId, address indexed receiver, uint96 indexed royaltyFee);
+    event CustomMinted(address indexed minter, uint8 indexed listId, uint40 indexed amount);
     event CustomMintDeleted(uint8 indexed listId);
     event CustomMintDisabled(uint8 indexed listId);
     event CustomMintRepriced(uint8 indexed listId, uint80 indexed price);
@@ -91,7 +92,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
-    address public constant vaultFactory = 0x9c9F968d36AacD2911b668DA9D2b277Dd783Ad8E;
+    address public constant vaultFactory = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
     uint16 internal constant _MAX_ROYALTY_BPS = 1000;
     uint16 internal constant _DENOMINATOR_BPS = 10000;
 
@@ -167,12 +168,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             if (!success) revert TransferFailed();
         }
         emit AlignmentUpdate(_allocation, _allocation);
-    }
-
-    // Disables further initialization, it is best practice to use this post-initialization
-    // If a deployed contract should not be initializable, call this to prevent that
-    function disableInitializers() external virtual {
-        _disableInitializers();
     }
 
     // >>>>>>>>>>>> [ VIEW / METADATA FUNCTIONS ] <<<<<<<<<<<<
@@ -272,17 +267,16 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         }
     }
 
-    // Standard mint function that supports batch minting and custom allocation
-    function mint(address recipient, uint256 amount, uint16 allocation) public payable virtual mintable(amount) {
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, address(0), allocation);
+    // Standard single-unit mint to msg.sender (implemented for max scannner compatibility)
+    function mint() public payable virtual mintable(1) {
+        if (msg.value < price) revert InsufficientPayment();
+        _mint(msg.sender, 1, address(0), minAllocation);
     }
 
-    // Standard batch mint with custom allocation support and referral fee support
-    function mint(address recipient, uint256 amount, address referral, uint16 allocation) public payable virtual mintable(amount) nonReentrant {
-        if (referral == msg.sender) revert Invalid();
+    // Standard multi-unit mint to msg.sender (implemented for max scanner compatibility)
+    function mint(uint256 amount) public payable virtual mintable(amount) {
         if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, referral, allocation);
+        _mint(msg.sender, amount, address(0), minAllocation);
     }
 
     // Standard mint function that supports batch minting
@@ -298,27 +292,28 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         _mint(recipient, amount, referral, minAllocation);
     }
 
-    // Standard single-unit mint to msg.sender (implemented for max scannner compatibility)
-    function mint() public payable virtual mintable(1) {
-        if (msg.value < price) revert InsufficientPayment();
-        _mint(msg.sender, 1, address(0), minAllocation);
+    // Standard mint function that supports batch minting and custom allocation
+    function mint(address recipient, uint256 amount, uint16 allocation) public payable virtual mintable(amount) {
+        if (msg.value < (price * amount)) revert InsufficientPayment();
+        _mint(recipient, amount, address(0), allocation);
     }
 
-    // Standard multi-unit mint to msg.sender (implemented for max scanner compatibility)
-    function mint(uint256 amount) public payable virtual mintable(amount) {
+    // Standard batch mint with custom allocation support and referral fee support
+    function mint(address recipient, uint256 amount, address referral, uint16 allocation) public payable virtual mintable(amount) nonReentrant {
+        if (referral == msg.sender) revert Invalid();
         if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(msg.sender, amount, address(0), minAllocation);
+        _mint(recipient, amount, referral, allocation);
     }
     
     // Whitelisted mint using merkle proofs
     function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) public payable virtual mintable(amount) nonReentrant {
-        if (!_customMintLists.contains(listId)) revert Invalid();
         CustomMint memory mintData = customMintData[listId];
+        if (mintData.root == bytes32("")) revert Invalid();
         if (amount > mintData.supply) revert MintCap();
         if (customClaims[msg.sender][listId] + amount > mintData.claimable) revert ExcessiveClaim();
         if (msg.value < amount * mintData.price) revert InsufficientPayment();
 
-        bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
+        bytes32 leaf = keccak256(bytes.concat(keccak256(bytes.concat(abi.encode(msg.sender)))));
         if (!MerkleProofLib.verifyCalldata(proof, mintData.root, leaf)) revert NothingToClaim();
 
         unchecked {
@@ -326,6 +321,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             customMintData[listId].supply -= amount;
         }
         _mint(recipient, amount, referral, minAllocation);
+        emit CustomMinted(msg.sender, listId, amount);
     }
 
     // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
@@ -390,7 +386,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Set arbitrary custom mint lists using merkle trees, can be reconfigured
     // NOTE: Cannot retroactively reduce mintable amount below minted supply for custom mint list
-    function setCustomMint(bytes32 _root, uint8 listId, uint40 amount, uint40 _claimable, uint80 newPrice) external virtual onlyOwner {
+    function setCustomMint(bytes32 root, uint8 listId, uint40 amount, uint40 claimable, uint80 newPrice) external virtual onlyOwner {
         if (!_customMintLists.contains(listId)) _customMintLists.add(listId);
         CustomMint memory mintData = customMintData[listId];
         // Validate adjustment doesn't decrease amount below custom minted count
@@ -406,8 +402,8 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
                     mintData.supply - (mintData.issued - amount);
             }
         }
-        customMintData[listId] = CustomMint({ root: _root, issued: amount, claimable: _claimable, supply: supply, price: newPrice });
-        emit CustomMintConfigured(_root, listId, amount);
+        customMintData[listId] = CustomMint({ root: root, issued: amount, claimable: claimable, supply: supply, price: newPrice });
+        emit CustomMintConfigured(root, listId, amount);
     }
 
     // Reduces claimable supply for custom list to 0
@@ -418,10 +414,10 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Reenables custom mint by setting claimable amount
-    function reenableCustomMint(uint8 listId, uint40 _claimable) external virtual onlyOwner {
+    function reenableCustomMint(uint8 listId, uint40 claimable) external virtual onlyOwner {
         if (!_customMintLists.contains(listId)) revert Invalid();
         uint40 issued = customMintData[listId].issued;
-        uint40 claimable = _claimable <= issued ? _claimable : issued;
+        claimable = claimable <= issued ? claimable : issued;
         customMintData[listId].claimable = claimable;
         emit CustomMintReenabled(listId, claimable);
     }
@@ -571,7 +567,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Forward calldata and payment to AlignmentVault. Used if ERC721M is AlignmentVault owner.
     // Calling this contract using the IAlignmentVaultMinimal interface will trigger this fallback.
-    fallback() external payable virtual {
+    fallback() external payable virtual onlyOwner {
         assembly {
             // Store the target contract address from the storage variable
             let target := sload(alignmentVault.slot)

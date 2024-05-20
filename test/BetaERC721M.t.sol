@@ -45,7 +45,6 @@ contract BetaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
-        template.disableInitializers();
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
         testToken.mint(address(this), 100 ether);
@@ -55,7 +54,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
         testNFT.safeMint(address(this), 3);
     }
 
-    function testInitialize_(
+    function testInitialize(
         string memory name,
         string memory symbol,
         string memory baseURI,
@@ -82,7 +81,6 @@ contract BetaERC721MTest is Test, ERC721Holder {
             return;
         }
         manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
-        manualInit.disableInitializers();
 
         assertEq(abi.encode(name), abi.encode(manualInit.name()), "name error");
         assertEq(abi.encode(symbol), abi.encode(manualInit.symbol()), "symbol error");
@@ -352,5 +350,16 @@ contract BetaERC721MTest is Test, ERC721Holder {
         payable(av).call{value: 1 ether}("");
         Ownable(av).transferOwnership(address(template));
         IAlignmentVault(address(template)).wrapEth(1 ether);
+    }
+
+    function testCustomMint() public {
+        template.setCustomMint(0x2733c38db000155462a813b4e01c2805062f66585041f82047d37e520804e232, 1, 10, 5, 0);
+        template.openMint();
+        bytes32[] memory proof = new bytes32[](3);
+        proof[0] = 0x3bd5223715c2aeb242433e85b4d9ce89738d6938a23826eca19bb6828d8a1bb9;
+        proof[1] = 0x8690ad9107ee95de79bb75185a25db961b1014009e89c3f55700d91f792d445b;
+        proof[2] = 0xbc3712ad9f7d1b20bfd5274a92a7026cb4ffd2ef26dfb2701b5119d924475930;
+        vm.prank(address(0x420));
+        template.customMint(proof, 1, address(0x420), 5, address(0));
     }
 }
