@@ -118,7 +118,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     // >>>>>>>>>>>> [ MODIFIERS ] <<<<<<<<<<<<
 
     modifier mintable(uint256 amount) {
-        if (!mintOpen) revert MintClosed();
         if (_totalSupply + amount > maxSupply) revert MintCap();
         _;
     }
@@ -269,24 +268,28 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Standard single-unit mint to msg.sender (implemented for max scannner compatibility)
     function mint() public payable virtual mintable(1) {
+        if (!mintOpen) revert MintClosed();
         if (msg.value < price) revert InsufficientPayment();
         _mint(msg.sender, 1, address(0), minAllocation);
     }
 
     // Standard multi-unit mint to msg.sender (implemented for max scanner compatibility)
     function mint(uint256 amount) public payable virtual mintable(amount) {
+        if (!mintOpen) revert MintClosed();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(msg.sender, amount, address(0), minAllocation);
     }
 
     // Standard mint function that supports batch minting
     function mint(address recipient, uint256 amount) public payable virtual mintable(amount) {
+        if (!mintOpen) revert MintClosed();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, address(0), minAllocation);
     }
 
     // Standard batch mint with referral fee support
     function mint(address recipient, uint256 amount, address referral) public payable virtual mintable(amount) nonReentrant {
+        if (!mintOpen) revert MintClosed();
         if (referral == msg.sender) revert Invalid();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, referral, minAllocation);
@@ -294,12 +297,14 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Standard mint function that supports batch minting and custom allocation
     function mint(address recipient, uint256 amount, uint16 allocation) public payable virtual mintable(amount) {
+        if (!mintOpen) revert MintClosed();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, address(0), allocation);
     }
 
     // Standard batch mint with custom allocation support and referral fee support
     function mint(address recipient, uint256 amount, address referral, uint16 allocation) public payable virtual mintable(amount) nonReentrant {
+        if (!mintOpen) revert MintClosed();
         if (referral == msg.sender) revert Invalid();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, referral, allocation);
