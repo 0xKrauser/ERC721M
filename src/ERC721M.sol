@@ -131,7 +131,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     function initialize(
         string memory name_, // Collection name ("Milady")
         string memory symbol_, // Collection symbol ("MIL")
-        string memory baseURI_, // ipfs://...
         uint40 _maxSupply, // Max supply (~1.099T max)
         uint16 _royalty, // Percentage in basis points (420 == 4.20%)
         uint16 _allocation, // Minimum Percentage of mint funds to AlignmentVault in basis points, minimum of 5% (777 == 7.77%)
@@ -153,7 +152,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         // Set all values
         _name = name_;
         _symbol = symbol_;
-        _baseURI = baseURI_;
         maxSupply = _maxSupply;
         price = _price;
         // Deploy AlignmentVault
@@ -184,7 +182,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     function contractURI() public view virtual returns (string memory) {
-        return LibString.concat(_baseURI, "contract.json");
+        return _contractURI;
     }
 
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
@@ -338,11 +336,17 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         emit ReferralFeeUpdate(newReferralFee);
     }
 
-    // Update baseURI for entire collection
-    function setBaseURI(string memory newBaseURI) external virtual onlyOwner {
+    // Update baseURI and/or contractURI for the entire collection
+    function setMetadata(string memory newBaseURI, string memory newContractURI) external virtual onlyOwner {
         if (uriLocked) revert URILocked();
-        _baseURI = newBaseURI;
-        emit BatchMetadataUpdate(0, maxSupply);
+        if (bytes(newBaseURI).length > 0) {
+            _baseURI = newBaseURI;
+            emit BatchMetadataUpdate(0, maxSupply);
+        }
+        if (bytes(newContractURI).length > 0) {
+            _contractURI = newContractURI;
+            emit ContractMetadataUpdate(newContractURI);
+        }
     }
 
     // Permanently lock collection URI

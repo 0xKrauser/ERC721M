@@ -35,7 +35,6 @@ contract BetaERC721MTest is Test, ERC721Holder {
         template.initialize(
             "ERC721M Test",
             "ERC721M",
-            "https://miya.wtf/api/",
             100,
             500,
             2000,
@@ -45,6 +44,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
+        template.setMetadata("https://miya.wtf/api/", "https://miya.wtf/api/contract.json");
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
         testToken.mint(address(this), 100 ether);
@@ -72,15 +72,17 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
         if (allocation < 500) {
             vm.expectRevert(IERC721M.NotAligned.selector);
-            manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
+            manualInit.initialize(name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
             return;
         }
         else if (allocation > 10000 || royalty > 1000) {
             vm.expectRevert(IERC721M.Invalid.selector);
-            manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
+            manualInit.initialize(name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
             return;
         }
-        manualInit.initialize(name, symbol, baseURI, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
+        manualInit.initialize(name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
+        vm.prank(owner);
+        manualInit.setMetadata(baseURI, "https://miya.wtf/api/contract.json");
 
         assertEq(abi.encode(name), abi.encode(manualInit.name()), "name error");
         assertEq(abi.encode(symbol), abi.encode(manualInit.symbol()), "symbol error");
@@ -200,13 +202,13 @@ contract BetaERC721MTest is Test, ERC721Holder {
     function testSetBaseURI(string memory baseURI) public {
         vm.assume(bytes(baseURI).length > 0);
 
-        template.setBaseURI(baseURI);
+        template.setMetadata(baseURI, "");
 
         assertEq(template.baseURI(), baseURI, "baseURI error");
 
         template.lockURI();
         vm.expectRevert(IERC721M.URILocked.selector);
-        template.setBaseURI(baseURI);
+        template.setMetadata(baseURI, "");
     }
 
     function testLockURI() public {

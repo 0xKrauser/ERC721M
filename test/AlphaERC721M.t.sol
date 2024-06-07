@@ -24,7 +24,6 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         template.initialize(
             "ERC721M Test",
             "ERC721M",
-            "https://miya.wtf/api/",
             100,
             500,
             2000,
@@ -34,6 +33,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
+        template.setMetadata("https://miya.wtf/api/", "https://miya.wtf/api/contract.json");
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
         testToken.mint(address(this), 100 ether);
@@ -48,7 +48,6 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
-            "https://miya.wtf/api/",
             100,
             500,
             2000,
@@ -58,6 +57,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
+        manualInit.setMetadata("https://miya.wtf/api/", "https://miya.wtf/api/contract.json");
         require(manualInit.minAllocation() == 2000);
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(0, 1 ether);
         require(recipient == address(this));
@@ -83,7 +83,6 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
-            "https://miya.wtf/api/",
             100,
             500,
             250,
@@ -101,7 +100,6 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
-            "https://miya.wtf/api/",
             100,
             500,
             10001,
@@ -115,7 +113,6 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
-            "https://miya.wtf/api/",
             100,
             10001,
             2000,
@@ -176,14 +173,14 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testSetBaseURI() public {
-        template.setBaseURI("ipfs://miyahash/");
+        template.setMetadata("ipfs://miyahash/", "");
         require(keccak256(abi.encodePacked(template.baseURI())) == keccak256(abi.encodePacked("ipfs://miyahash/")));
     }
 
     function testSetBaseURIRevertURILocked() public {
         template.lockURI();
         vm.expectRevert(ERC721M.URILocked.selector);
-        template.setBaseURI("ipfs://miyahash/");
+        template.setMetadata("ipfs://miyahash/", "");
     }
 
     function testLockURI() public {
