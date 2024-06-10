@@ -95,7 +95,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     uint16 public referralFee;
     bool public uriLocked;
     bool public mintOpen;
-    address public alignmentVault;
+
     mapping(uint8 listId => CustomMint) public customMintData;
     mapping(address user => mapping(uint8 listId => uint256 claimed)) public customClaims;
 

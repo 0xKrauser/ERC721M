@@ -44,6 +44,8 @@ contract ERC721M is ERC721Core {
     uint16 public minAllocation;
     uint16 public maxAllocation;
 
+    address public alignmentVault;
+
     // >>>>>>>>>>>> [ CONSTRUCTION / INITIALIZATION ] <<<<<<<<<<<<
 
     // Constructor is kept empty in order to make the template compatible with ERC-1167 proxy factories
