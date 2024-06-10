@@ -152,6 +152,14 @@ contract ERC721M is ERC721Core {
         _mint(recipient, amount, referral, allocation);
     }
 
+    // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
+
+    function setReferralFee(uint16 newReferralFee) external virtual override onlyOwner {
+        if (newReferralFee > (_DENOMINATOR_BPS - maxAllocation)) revert Invalid();
+        referralFee = newReferralFee;
+        emit ReferralFeeUpdate(newReferralFee);
+    }
+
     // Increase mint alignment allocation
     // NOTE: There will be no function to decrease this value. This operation is one-way only.
     function increaseAlignment(uint16 newMinAllocation, uint16 newMaxAllocation) external virtual onlyOwner {
