@@ -5,6 +5,7 @@ import "../lib/forge-std/src/Test.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
+import "../src/ERC721Core.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/solady/src/auth/Ownable.sol";
@@ -96,7 +97,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
 
     function testInitializeRevertInvalid() public {
         manualInit = new ERC721M();
-        vm.expectRevert(ERC721M.Invalid.selector);
+        vm.expectRevert(ERC721Core.Invalid.selector);
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
@@ -109,7 +110,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
-        vm.expectRevert(ERC721M.Invalid.selector);
+        vm.expectRevert(ERC721Core.Invalid.selector);
         manualInit.initialize(
             "ERC721M Test",
             "ERC721M",
@@ -179,7 +180,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
 
     function testSetBaseURIRevertURILocked() public {
         template.lockURI();
-        vm.expectRevert(ERC721M.URILocked.selector);
+        vm.expectRevert(ERC721Core.URILocked.selector);
         template.setMetadata("ipfs://miyahash/", "");
     }
 
@@ -204,25 +205,25 @@ contract AlphaERC721MTest is Test, ERC721Holder {
 
     function testMintRevertInsufficientPayment() public {
         template.openMint();
-        vm.expectRevert(ERC721M.InsufficientPayment.selector);
+        vm.expectRevert(ERC721Core.InsufficientPayment.selector);
         template.mint{value: 0.001 ether}(address(this), 1, 2000);
     }
 
     function testMintRevertMintClosed() public {
-        vm.expectRevert(ERC721M.MintClosed.selector);
+        vm.expectRevert(ERC721Core.MintClosed.selector);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
     }
 
     function testMintRevertMintCapReached() public {
         template.openMint();
         template.mint{value: 0.01 ether * 100}(address(this), 100, 2000);
-        vm.expectRevert(ERC721M.MintCap.selector);
+        vm.expectRevert(ERC721Core.MintCap.selector);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
     }
 
     function testMintRevertMintCapExceeded() public {
         template.openMint();
-        vm.expectRevert(ERC721M.MintCap.selector);
+        vm.expectRevert(ERC721Core.MintCap.selector);
         template.mint{value: 0.01 ether * 101}(address(this), 101, 2000);
     }
 

@@ -6,6 +6,7 @@ import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
 import "../lib/solady/src/utils/FixedPointMathLib.sol";
+import "../src/ERC721Core.sol";
 import "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/solady/src/auth/Ownable.sol";
@@ -299,11 +300,11 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
         template.openMint();
         template.mint{value: 0.01 ether * amount}(amount);
-        template.decreaseSupply(newSupply);
+        template.setSupply(newSupply);
         assertEq(template.maxSupply(), newSupply, "newSupply error");
 
         vm.expectRevert(IERC721M.Invalid.selector);
-        template.decreaseSupply(invalidSupply);
+        template.setSupply(invalidSupply);
     }
 
     function testUpdateApprovedContracts(address[] memory contracts) public {

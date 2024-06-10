@@ -3,26 +3,13 @@ pragma solidity ^0.8.23;
 
 // >>>>>>>>>>>> [ IMPORTS ] <<<<<<<<<<<<
 
-import {ERC721x} from "../lib/ERC721x/src/erc721/ERC721x.sol";
-import {ERC2981} from "../lib/solady/src/tokens/ERC2981.sol";
-import {Initializable} from "../lib/solady/src/utils/Initializable.sol";
-import {ReentrancyGuard} from "../lib/solady/src/utils/ReentrancyGuard.sol";
-
-import {EnumerableSetLib} from "../lib/solady/src/utils/EnumerableSetLib.sol";
-import {LibString} from "../lib/solady/src/utils/LibString.sol";
+import {ERC721Core} from "./ERC721Core.sol";
 import {FixedPointMathLib as FPML} from "../lib/solady/src/utils/FixedPointMathLib.sol";
-import {MerkleProofLib} from "../lib/solady/src/utils/MerkleProofLib.sol";
 
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
 
-//import {console2} from "../lib/forge-std/src/console2.sol";
-
 // >>>>>>>>>>>> [ INTERFACES ] <<<<<<<<<<<<
-
-interface IAsset {
-    function balanceOf(address holder) external returns (uint256);
-}
 
 interface IAlignmentVaultMinimal {
     function vault() external view returns (address);
@@ -40,87 +27,22 @@ interface IFactory {
  * @notice A NFT template that can be configured to automatically send a portion of mint funds to an AlignmentVault
  * @custom:github https://github.com/Zodomo/ERC721M
  */
-contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
-    using LibString for uint256; // Used to convert uint256 tokenId to string for tokenURI()
-    using EnumerableSetLib for EnumerableSetLib.Uint256Set;
-    using EnumerableSetLib for EnumerableSetLib.AddressSet;
+contract ERC721M is ERC721Core {
 
     // >>>>>>>>>>>> [ ERRORS ] <<<<<<<<<<<<
 
-    error Invalid();
-    error MintCap();
-    error URILocked();
     error NotAligned();
-    error MintClosed();
-    error Blacklisted();
-    error TransferFailed();
-    error NothingToClaim();
-    error ExcessiveClaim();
-    error RoyaltiesDisabled();
-    error InsufficientPayment();
 
     // >>>>>>>>>>>> [ EVENTS ] <<<<<<<<<<<<
 
-    event URILock();
-    event MintOpen();
-    event RoyaltyDisabled();
-    event Withdraw(address indexed to, uint256 indexed amount);
-    event PriceUpdate(uint80 indexed price);
-    event SupplyUpdate(uint40 indexed supply);
     event AlignmentUpdate(uint16 indexed minAllocation, uint16 indexed maxAllocation);
-    event BlacklistUpdate(address[] indexed blacklistedAssets, bool indexed status);
-    event ReferralFeePaid(address indexed referral, uint256 indexed amount);
-    event ReferralFeeUpdate(uint16 indexed referralFee);
-    event BatchMetadataUpdate(uint256 indexed fromTokenId, uint256 indexed toTokenId);
-    event ContractMetadataUpdate(string indexed uri);
-    event RoyaltyUpdate(uint256 indexed tokenId, address indexed receiver, uint96 indexed royaltyFee);
-    event CustomMinted(address indexed minter, uint8 indexed listId, uint40 indexed amount);
-    event CustomMintDeleted(uint8 indexed listId);
-    event CustomMintDisabled(uint8 indexed listId);
-    event CustomMintRepriced(uint8 indexed listId, uint80 indexed price);
-    event CustomMintReenabled(uint8 indexed listId, uint40 indexed claimable);
-    event CustomMintConfigured(bytes32 indexed merkleRoot, uint8 indexed listId, uint40 indexed amount);
 
     // >>>>>>>>>>>> [ STORAGE ] <<<<<<<<<<<<
 
-    struct CustomMint {
-        bytes32 root;
-        uint40 issued;
-        uint40 claimable;
-        uint40 supply;
-        uint80 price;
-    }
-
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
     address public constant vaultFactory = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
-    uint16 internal constant _MAX_ROYALTY_BPS = 1000;
-    uint16 internal constant _DENOMINATOR_BPS = 10000;
-
-    EnumerableSetLib.AddressSet internal _blacklist;
-    EnumerableSetLib.Uint256Set internal _customMintLists;
-    string internal _name;
-    string internal _symbol;
-    string internal _baseURI;
-    string internal _contractURI;
-    uint40 internal _totalSupply;
-
-    uint80 public price;
-    uint40 public maxSupply;
     uint16 public minAllocation;
     uint16 public maxAllocation;
-    uint16 public referralFee;
-    bool public uriLocked;
-    bool public mintOpen;
-    address public alignmentVault;
-    mapping(uint8 listId => CustomMint) public customMintData;
-    mapping(address user => mapping(uint8 listId => uint256 claimed)) public customClaims;
-
-    // >>>>>>>>>>>> [ MODIFIERS ] <<<<<<<<<<<<
-
-    modifier mintable(uint256 amount) {
-        if (_totalSupply + amount > maxSupply) revert MintCap();
-        _;
-    }
 
     // >>>>>>>>>>>> [ CONSTRUCTION / INITIALIZATION ] <<<<<<<<<<<<
 
@@ -141,19 +63,15 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         bytes32 _salt // AV Deployment salt
     ) external payable virtual initializer {
         // Confirm mint alignment allocation is within valid range
+        //@TODO opinionated magic number, maybe move this to the factory
         if (_allocation < 500) revert NotAligned(); // Require allocation be >= 5%
-        if (_allocation > _DENOMINATOR_BPS || _royalty > _MAX_ROYALTY_BPS) revert Invalid(); // Require allocation and royalty be <= 100%
+        if (_allocation > _DENOMINATOR_BPS) revert Invalid(); // Require allocation and royalty be <= 100%
         minAllocation = _allocation;
         maxAllocation = _allocation;
-        _setTokenRoyalty(0, _owner, _royalty);
-        _setDefaultRoyalty(_owner, _royalty);
-        // Initialize ownership
-        _initializeOwner(_owner);
-        // Set all values
-        _name = name_;
-        _symbol = symbol_;
-        maxSupply = _maxSupply;
-        price = _price;
+
+        // Initialize ERC721Core
+        super.initialize(name_, symbol_, _maxSupply, _royalty, _owner, _price);
+        
         // Deploy AlignmentVault
         address deployedAV;
         if (_salt == bytes32("")) deployedAV = IFactory(vaultFactory).deploy(_owner, _alignedNft, _vaultId);
@@ -167,64 +85,13 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         emit AlignmentUpdate(_allocation, _allocation);
     }
 
-    // >>>>>>>>>>>> [ VIEW / METADATA FUNCTIONS ] <<<<<<<<<<<<
-
-    function name() public view virtual override returns (string memory) {
-        return _name;
-    }
-
-    function symbol() public view virtual override returns (string memory) {
-        return _symbol;
-    }
-
-    function baseURI() public view virtual returns (string memory) {
-        return _baseURI;
-    }
-
-    function contractURI() public view virtual returns (string memory) {
-        return _contractURI;
-    }
-
-    function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
-        if (!_exists(tokenId)) revert TokenDoesNotExist();
-        string memory newBaseURI = baseURI();
-        return (bytes(newBaseURI).length > 0 ? string(abi.encodePacked(newBaseURI, tokenId.toString())) : "");
-    }
-
-    function totalSupply() public view virtual returns (uint256) {
-        return _totalSupply;
-    }
-
-    // Override to add royalty interface. ERC721, ERC721Metadata, and ERC721x are present in the ERC721x override
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721x, ERC2981) returns (bool) {
-        return ERC721x.supportsInterface(interfaceId) || ERC2981.supportsInterface(interfaceId);
-    }
-
-    function getBlacklist() public view virtual returns (address[] memory) {
-        return _blacklist.values();
-    }
-
-    function getCustomMintListIds() external view virtual returns (uint256[] memory) {
-        return _customMintLists.values();
-    }
-
     // >>>>>>>>>>>> [ INTERNAL FUNCTIONS ] <<<<<<<<<<<<
 
-    // Blacklist function to prevent mints to and from holders of prohibited assets, applied even if recipient isn't minter
-    function _enforceBlacklist(address minter, address recipient) internal virtual {
-        address[] memory blacklist = _blacklist.values();
-        uint256 count;
-        for (uint256 i = 1; i < blacklist.length;) {
-            unchecked {
-                count += IAsset(blacklist[i]).balanceOf(minter);
-                count += IAsset(blacklist[i]).balanceOf(recipient);
-                if (count > 0) revert Blacklisted();
-                ++i;
-            }
-        }
-    }
-
     // >>>>>>>>>>>> [ MINT LOGIC ] <<<<<<<<<<<<
+
+    function _mint(address recipient, uint256 amount, address referral) internal override {
+        _mint(recipient, amount, referral, minAllocation);
+    }
 
     // Solady ERC721 _mint override to implement mint funds alignment and blacklist
     function _mint(address recipient, uint256 amount, address referral, uint16 allocation) internal {
@@ -232,7 +99,11 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         if (recipient == address(0) || amount == 0) revert Invalid();
         // Ensure minter and recipient don't hold blacklisted assets
         _enforceBlacklist(msg.sender, recipient);
+        
+        //@TODO maybe we can do this before everything else and then call super._mint
+
         // Ensure allocation set by the user is in the range between minAllocation and maxAllocation
+
         if(allocation < minAllocation || allocation > maxAllocation) revert Invalid();
         // Calculate allocation
         uint256 mintAlloc = FPML.fullMulDivUp(allocation, msg.value, _DENOMINATOR_BPS);
@@ -264,35 +135,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         }
     }
 
-    // Standard single-unit mint to msg.sender (implemented for max scannner compatibility)
-    function mint() public payable virtual mintable(1) {
-        if (!mintOpen) revert MintClosed();
-        if (msg.value < price) revert InsufficientPayment();
-        _mint(msg.sender, 1, address(0), minAllocation);
-    }
-
-    // Standard multi-unit mint to msg.sender (implemented for max scanner compatibility)
-    function mint(uint256 amount) public payable virtual mintable(amount) {
-        if (!mintOpen) revert MintClosed();
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(msg.sender, amount, address(0), minAllocation);
-    }
-
-    // Standard mint function that supports batch minting
-    function mint(address recipient, uint256 amount) public payable virtual mintable(amount) {
-        if (!mintOpen) revert MintClosed();
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, address(0), minAllocation);
-    }
-
-    // Standard batch mint with referral fee support
-    function mint(address recipient, uint256 amount, address referral) public payable virtual mintable(amount) nonReentrant {
-        if (!mintOpen) revert MintClosed();
-        if (referral == msg.sender) revert Invalid();
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, referral, minAllocation);
-    }
-
     // Standard mint function that supports batch minting and custom allocation
     function mint(address recipient, uint256 amount, uint16 allocation) public payable virtual mintable(amount) {
         if (!mintOpen) revert MintClosed();
@@ -306,177 +148,6 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         if (referral == msg.sender) revert Invalid();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, referral, allocation);
-    }
-    
-    // Whitelisted mint using merkle proofs
-    function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) public payable virtual mintable(amount) nonReentrant {
-        CustomMint memory mintData = customMintData[listId];
-        if (mintData.root == bytes32("")) revert Invalid();
-        if (amount > mintData.supply) revert MintCap();
-        if (customClaims[msg.sender][listId] + amount > mintData.claimable) revert ExcessiveClaim();
-        if (msg.value < amount * mintData.price) revert InsufficientPayment();
-
-        bytes32 leaf = keccak256(bytes.concat(keccak256(bytes.concat(abi.encode(msg.sender)))));
-        if (!MerkleProofLib.verifyCalldata(proof, mintData.root, leaf)) revert NothingToClaim();
-
-        unchecked {
-            customClaims[msg.sender][listId] += amount;
-            customMintData[listId].supply -= amount;
-        }
-        _mint(recipient, amount, referral, minAllocation);
-        emit CustomMinted(msg.sender, listId, amount);
-    }
-
-    // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
-
-    // Set referral fee, must be < (_DENOMINATOR_BPS - allocation)
-    function setReferralFee(uint16 newReferralFee) external virtual onlyOwner {
-        if (newReferralFee > (_DENOMINATOR_BPS - maxAllocation)) revert Invalid();
-        referralFee = newReferralFee;
-        emit ReferralFeeUpdate(newReferralFee);
-    }
-
-    // Update baseURI and/or contractURI for the entire collection
-    function setMetadata(string memory newBaseURI, string memory newContractURI) external virtual onlyOwner {
-        if (uriLocked) revert URILocked();
-        if (bytes(newBaseURI).length > 0) {
-            _baseURI = newBaseURI;
-            emit BatchMetadataUpdate(0, maxSupply);
-        }
-        if (bytes(newContractURI).length > 0) {
-            _contractURI = newContractURI;
-            emit ContractMetadataUpdate(newContractURI);
-        }
-    }
-
-    // Permanently lock collection URI
-    function lockURI() external virtual onlyOwner {
-        uriLocked = true;
-        emit URILock();
-    }
-
-    // Update ETH mint price
-    function setPrice(uint80 newPrice) external virtual onlyOwner {
-        price = newPrice;
-        emit PriceUpdate(newPrice);
-    }
-
-    // Set default royalty receiver and royalty fee
-    function setRoyalties(address recipient, uint96 royaltyFee) external virtual onlyOwner {
-        if (royaltyFee > _MAX_ROYALTY_BPS) revert Invalid();
-        // Revert if royalties are disabled
-        (address receiver,) = royaltyInfo(0, 0);
-        if (receiver == address(0)) revert RoyaltiesDisabled();
-
-        // Royalty recipient of nonexistent tokenId 0 is used as royalty status indicator, address(0) == disabled
-        _setTokenRoyalty(0, recipient, royaltyFee);
-        _setDefaultRoyalty(recipient, royaltyFee);
-        emit RoyaltyUpdate(0, recipient, royaltyFee);
-    }
-
-    // Set royalty receiver and royalty fee for a specific tokenId
-    function setRoyaltiesForId(
-        uint256 tokenId,
-        address recipient,
-        uint96 royaltyFee
-    ) external virtual onlyOwner {
-        if (royaltyFee > _MAX_ROYALTY_BPS) revert Invalid();
-        // Revert if royalties are disabled
-        (address receiver,) = royaltyInfo(0, 0);
-        if (receiver == address(0)) revert RoyaltiesDisabled();
-        // Revert if resetting tokenId 0 as it is utilized for royalty enablement status
-        if (tokenId == 0) revert Invalid();
-
-        // Reset token royalty if fee is 0, else set it
-        if (royaltyFee == 0) _resetTokenRoyalty(tokenId);
-        else _setTokenRoyalty(tokenId, recipient, royaltyFee);
-        emit RoyaltyUpdate(tokenId, recipient, royaltyFee);
-    }
-
-    // Set arbitrary custom mint lists using merkle trees, can be reconfigured
-    // NOTE: Cannot retroactively reduce mintable amount below minted supply for custom mint list
-    function setCustomMint(bytes32 root, uint8 listId, uint40 amount, uint40 claimable, uint80 newPrice) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) _customMintLists.add(listId);
-        CustomMint memory mintData = customMintData[listId];
-        // Validate adjustment doesn't decrease amount below custom minted count
-        if (mintData.issued != 0 && mintData.issued - mintData.supply > amount) revert Invalid();
-        uint40 supply;
-        unchecked {
-            // Set amount as supply if new custom mint
-            if (mintData.issued == 0) supply = amount;
-            // Properly adjust existing supply
-            else {
-                supply = amount >= mintData.issued ? 
-                    mintData.supply + (amount - mintData.issued) :
-                    mintData.supply - (mintData.issued - amount);
-            }
-        }
-        customMintData[listId] = CustomMint({ root: root, issued: amount, claimable: claimable, supply: supply, price: newPrice });
-        emit CustomMintConfigured(root, listId, amount);
-    }
-
-    // Reduces claimable supply for custom list to 0
-    function disableCustomMint(uint8 listId) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) revert Invalid();
-        customMintData[listId].claimable = 0;
-        emit CustomMintDisabled(listId);
-    }
-
-    // Reenables custom mint by setting claimable amount
-    function reenableCustomMint(uint8 listId, uint40 claimable) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) revert Invalid();
-        uint40 issued = customMintData[listId].issued;
-        claimable = claimable <= issued ? claimable : issued;
-        customMintData[listId].claimable = claimable;
-        emit CustomMintReenabled(listId, claimable);
-    }
-
-    // Reprice custom mint
-    function repriceCustomMint(uint8 listId, uint80 newPrice) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) revert Invalid();
-        customMintData[listId].price = newPrice;
-        emit CustomMintRepriced(listId, newPrice);
-    }
-
-    // Completely nukes a custom mint list to minimal state
-    function nukeCustomMint(uint8 listId) external virtual onlyOwner {
-        CustomMint memory mintData = customMintData[listId];
-        if (mintData.issued == mintData.supply) {
-            if (_customMintLists.contains(listId)) _customMintLists.remove(listId);
-            delete customMintData[listId];
-            emit CustomMintDeleted(listId);
-        } else {
-            customMintData[listId] = CustomMint({ 
-                root: bytes32(""), 
-                issued: mintData.issued - mintData.supply, 
-                claimable: 0, 
-                supply: 0,
-                price: 0
-            });
-            emit CustomMintConfigured(bytes32(""), listId, 0);
-        }
-    }
-
-    // Irreversibly disable royalties by resetting tokenId 0 royalty to (address(0), 0) and deleting default royalty info
-    function disableRoyalties() external virtual onlyOwner {
-        _deleteDefaultRoyalty();
-        _resetTokenRoyalty(0);
-        emit RoyaltyDisabled();
-    }
-
-    // Configure which assets are on blacklist
-    function setBlacklist(address[] memory blacklistedAssets, bool status) external virtual onlyOwner {
-        for (uint256 i; i < blacklistedAssets.length; ++i) {
-            if (status) _blacklist.add(blacklistedAssets[i]);
-            else _blacklist.remove(blacklistedAssets[i]);
-        }
-        emit BlacklistUpdate(blacklistedAssets, status);
-    }
-
-    // Open mint functions
-    function openMint() external virtual onlyOwner {
-        mintOpen = true;
-        emit MintOpen();
     }
 
     // Increase mint alignment allocation
@@ -495,16 +166,8 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         emit AlignmentUpdate(newMinAllocation, newMaxAllocation);
     }
 
-    // Decrease token maxSupply
-    // NOTE: There is and will be no function to increase supply. This operation is one-way only.
-    function decreaseSupply(uint40 newMaxSupply) external virtual onlyOwner {
-        if (newMaxSupply >= maxSupply || newMaxSupply < totalSupply()) revert Invalid();
-        maxSupply = newMaxSupply;
-        emit SupplyUpdate(newMaxSupply);
-    }
-
     // Withdraw non-allocated mint funds
-    function withdrawFunds(address recipient, uint256 amount) external virtual nonReentrant {
+    function withdrawFunds(address recipient, uint256 amount) external virtual override nonReentrant {
         // Cache owner address to save gas
         address owner = owner();
         uint256 balance = address(this).balance;
@@ -528,22 +191,22 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     // >>>>>>>>>>>> [ ASSET HANDLING ] <<<<<<<<<<<<
 
     // Internal handling for receive() and fallback() to reduce code length
-    function _processPayment() internal {
+    function _processPayment() internal override {
         if (mintOpen) mint(msg.sender, (msg.value / price));
         else {
-            // Calculate allocation and split paymeent accordingly
-            uint256 mintAlloc = FPML.fullMulDivUp(minAllocation, msg.value, _DENOMINATOR_BPS);
-            // Success when transferring to vault isn't checked because transfers to vault cant fail
-            payable(alignmentVault).call{ value: mintAlloc }("");
-            // Reentrancy risk is ignored here because if owner wants to withdraw that way that's their prerogative
-            // But if transfer to owner fails for any reason, it will be sent to the vault
-            (bool success,) = payable(owner()).call{ value: msg.value - mintAlloc }("");
-            if (!success) payable(alignmentVault).call{ value: msg.value - mintAlloc }("");
+        // Calculate allocation and split paymeent accordingly
+        uint256 mintAlloc = FPML.fullMulDivUp(minAllocation, msg.value, _DENOMINATOR_BPS);
+        // Success when transferring to vault isn't checked because transfers to vault cant fail
+        payable(alignmentVault).call{ value: mintAlloc }("");
+        // Reentrancy risk is ignored here because if owner wants to withdraw that way that's their prerogative
+        // But if transfer to owner fails for any reason, it will be sent to the vault
+        (bool success,) = payable(owner()).call{ value: msg.value - mintAlloc }("");
+        if (!success) payable(alignmentVault).call{ value: msg.value - mintAlloc }("");
         }
     }
 
     // Rescue non-aligned tokens from contract, else send aligned tokens to vault
-    function rescueERC20(address addr, address recipient) external virtual onlyOwner {
+    function rescueERC20(address addr, address recipient) external virtual override onlyOwner {
         uint256 balance = IERC20(addr).balanceOf(address(this));
         if (addr == IAlignmentVaultMinimal(alignmentVault).vault()) {
             IERC20(addr).transfer(alignmentVault, balance);
@@ -553,7 +216,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Rescue non-aligned NFTs from contract, else send aligned NFTs to vault
-    function rescueERC721(address addr, address recipient, uint256 tokenId) external virtual onlyOwner {
+    function rescueERC721(address addr, address recipient, uint256 tokenId) external virtual override onlyOwner {
         if (addr == IAlignmentVaultMinimal(alignmentVault).alignedNft()) {
             IERC721(addr).safeTransferFrom(address(this), alignmentVault, tokenId);
         } else {
@@ -570,7 +233,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Process all received ETH payments
-    receive() external payable virtual {
+    receive() external payable virtual override {
         _processPayment();
     }
 
