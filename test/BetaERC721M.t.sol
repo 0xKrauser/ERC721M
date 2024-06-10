@@ -45,7 +45,8 @@ contract BetaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
-        template.setMetadata("https://miya.wtf/api/", "https://miya.wtf/api/contract.json");
+        template.setBaseURI("https://miya.wtf/api/", "");
+        template.setContractURI("https://miya.wtf/api/contract.json");
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
         testToken.mint(address(this), 100 ether);
@@ -83,7 +84,9 @@ contract BetaERC721MTest is Test, ERC721Holder {
         }
         manualInit.initialize(name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32(""));
         vm.prank(owner);
-        manualInit.setMetadata(baseURI, "https://miya.wtf/api/contract.json");
+        manualInit.setBaseURI(baseURI, "");
+        vm.prank(owner);
+        manualInit.setContractURI("https://miya.wtf/api/contract.json");
 
         assertEq(abi.encode(name), abi.encode(manualInit.name()), "name error");
         assertEq(abi.encode(symbol), abi.encode(manualInit.symbol()), "symbol error");
@@ -203,18 +206,18 @@ contract BetaERC721MTest is Test, ERC721Holder {
     function testSetBaseURI(string memory baseURI) public {
         vm.assume(bytes(baseURI).length > 0);
 
-        template.setMetadata(baseURI, "");
+        template.setBaseURI(baseURI, "");
 
         assertEq(template.baseURI(), baseURI, "baseURI error");
 
-        template.lockURI();
+        template.freezeURI();
         vm.expectRevert(IERC721M.URILocked.selector);
-        template.setMetadata(baseURI, "");
+        template.setBaseURI(baseURI, "");
     }
 
-    function testLockURI() public {
-        template.lockURI();
-        assertEq(template.uriLocked(), true, "uriLocked error");
+    function testFreezeURI() public {
+        template.freezeURI();
+        assertEq(template.permanentURI(), true, "uriLocked error");
     }
 
     function testSetPrice(uint80 price) public {

@@ -34,7 +34,8 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
-        template.setMetadata("https://miya.wtf/api/", "https://miya.wtf/api/contract.json");
+        template.setBaseURI("https://miya.wtf/api/", "");
+        template.setContractURI("https://miya.wtf/api/contract.json");
         vm.deal(address(this), 1000 ether);
         testToken = new MockERC20("Test Token", "TEST", 18);
         testToken.mint(address(this), 100 ether);
@@ -58,7 +59,8 @@ contract AlphaERC721MTest is Test, ERC721Holder {
             21,
             bytes32("")
         );
-        manualInit.setMetadata("https://miya.wtf/api/", "https://miya.wtf/api/contract.json");
+        manualInit.setBaseURI("https://miya.wtf/api/", "");
+        manualInit.setContractURI("https://miya.wtf/api/contract.json");
         require(manualInit.minAllocation() == 2000);
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(0, 1 ether);
         require(recipient == address(this));
@@ -174,19 +176,19 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testSetBaseURI() public {
-        template.setMetadata("ipfs://miyahash/", "");
+        template.setBaseURI("ipfs://miyahash/", "");
         require(keccak256(abi.encodePacked(template.baseURI())) == keccak256(abi.encodePacked("ipfs://miyahash/")));
     }
 
-    function testSetBaseURIRevertURILocked() public {
-        template.lockURI();
-        vm.expectRevert(ERC721Core.URILocked.selector);
-        template.setMetadata("ipfs://miyahash/", "");
+    function testSetBaseURIRevertPermanentURI() public {
+        template.freezeURI();
+        vm.expectRevert(ERC721Core.IsPermanentURI.selector);
+        template.setBaseURI("ipfs://miyahash/", "");
     }
 
-    function testLockURI() public {
-        template.lockURI();
-        require(template.uriLocked() == true);
+    function testFreezeURI() public {
+        template.freezeURI();
+        require(template.permanentURI() == true);
     }
 
     function testTransferOwnership(address _newOwner) public {

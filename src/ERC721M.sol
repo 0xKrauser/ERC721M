@@ -72,7 +72,7 @@ contract ERC721M is ERC721Core {
         maxAllocation = _allocation;
 
         // Initialize ERC721Core
-        super.initialize(name_, symbol_, _maxSupply, _royalty, _owner, _price);
+        _initialize(name_, symbol_, _maxSupply, _royalty, _owner, _price);
         
         // Deploy AlignmentVault
         address deployedAV;
