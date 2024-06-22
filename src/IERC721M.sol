@@ -52,26 +52,26 @@ interface IERC721M is IERC721, IERC721x, IERC2981 {
         uint80 price;
     }
 
-    function name() external view returns (string memory);//
-    function symbol() external view returns (string memory);//
-    function baseURI() external view returns (string memory);//
-    function contractURI() external view returns (string memory);//
-    function tokenURI(uint256 tokenId) external view returns (string memory);//
-    function maxSupply() external view returns (uint40);//
-    function totalSupply() external view returns (uint256);//
-    function price() external view returns (uint256);//
+    function name() external view returns (string memory); //
+    function symbol() external view returns (string memory); //
+    function baseURI() external view returns (string memory); //
+    function contractURI() external view returns (string memory); //
+    function tokenURI(uint256 tokenId) external view returns (string memory); //
+    function maxSupply() external view returns (uint40); //
+    function totalSupply() external view returns (uint256); //
+    function price() external view returns (uint256); //
 
-    function vaultFactory() external view returns (address);//
-    function uriLocked() external view returns (bool);//
-    function mintOpen() external view returns (bool);//
-    function alignmentVault() external view returns (address);//
-    function minAllocation() external view returns (uint16);//
-    function maxAllocation() external view returns (uint16);//
-    function referralFee() external view returns (uint16);//
-    function getBlacklist() external view returns (address[] memory);//
-    function getCustomMintListIds() external view returns (uint256[] memory);//
-    function customMintData(uint8 listId) external view returns (CustomMint memory);//
-    function customClaims(address user, uint8 listId) external view returns (uint256 claimed);//
+    function vaultFactory() external view returns (address); //
+    function uriLocked() external view returns (bool); //
+    function mintOpen() external view returns (bool); //
+    function alignmentVault() external view returns (address); //
+    function minAllocation() external view returns (uint16); //
+    function maxAllocation() external view returns (uint16); //
+    function referralFee() external view returns (uint16); //
+    function getBlacklist() external view returns (address[] memory); //
+    function getCustomMintListIds() external view returns (uint256[] memory); //
+    function customMintData(uint8 listId) external view returns (CustomMint memory); //
+    function customClaims(address user, uint8 listId) external view returns (uint256 claimed); //
 
     function setReferralFee(uint16 newReferralFee) external;
     function setBaseURI(string memory newBaseURI) external;
@@ -99,7 +99,13 @@ interface IERC721M is IERC721, IERC721x, IERC2981 {
     function mint(address recipient, uint256 amount, address referral) external payable;
     function mint(address recipient, uint256 amount, uint16 allocation) external payable;
     function mint(address recipient, uint256 amount, address referral, uint16 allocation) external payable;
-    function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) external payable;
+    function customMint(
+        bytes32[] calldata proof,
+        uint8 listId,
+        address recipient,
+        uint40 amount,
+        address referral
+    ) external payable;
 
     function rescueERC20(address addr, address recipient) external;
     function rescueERC721(address addr, address recipient, uint256 tokenId) external;

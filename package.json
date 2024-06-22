@@ -1,0 +1,38 @@
+{
+    "name": "ERC721M",
+    "description": "",
+    "version": "0.1.0",
+    "author": {
+      "name": "Zodomo.eth",
+      "url": "https://github.com/zodomo"
+    },
+    "dependencies": {
+    },
+    "devDependencies": {
+      "forge-std": "github:foundry-rs/forge-std#v1.8.2",
+      "prettier": "^3.3.2",
+      "solhint": "^5.0.1"
+    },
+    "keywords": [
+      "blockchain",
+      "ethereum",
+      "forge",
+      "foundry",
+      "smart-contracts",
+      "solidity",
+      "template"
+    ],
+    "private": true,
+    "scripts": {
+      "clean": "rm -rf cache out",
+      "build": "forge build",
+      "lint": "yarn lint:sol && yarn prettier:check",
+      "lint:sol": "forge fmt --check && yarn solhint {script,src,test}/**/*.sol",
+      "prettier:check": "prettier --check \"**/*.{json,md,yml}\" --ignore-path \".prettierignore\"",
+      "prettier:write": "prettier --write \"**/*.{json,md,yml}\" --ignore-path \".prettierignore\"",
+      "test": "forge test",
+      "test:coverage": "forge coverage",
+      "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
+    }
+  }
+  

@@ -8,6 +8,7 @@ import {FixedPointMathLib as FPML} from "../lib/solady/src/utils/FixedPointMathL
 
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
+// import {console2} from "../lib/forge-std/src/Console2.sol";
 
 // >>>>>>>>>>>> [ INTERFACES ] <<<<<<<<<<<<
 
@@ -18,7 +19,12 @@ interface IAlignmentVaultMinimal {
 
 interface IFactory {
     function deploy(address vaultOwner, address alignedNft, uint96 vaultId) external returns (address);
-    function deployDeterministic(address vaultOwner, address alignedNft, uint96 vaultId, bytes32 salt) external returns (address);
+    function deployDeterministic(
+        address vaultOwner,
+        address alignedNft,
+        uint96 vaultId,
+        bytes32 salt
+    ) external returns (address);
 }
 
 /**
@@ -28,7 +34,6 @@ interface IFactory {
  * @custom:github https://github.com/Zodomo/ERC721M
  */
 contract ERC721M is ERC721Core {
-
     // >>>>>>>>>>>> [ ERRORS ] <<<<<<<<<<<<
 
     error NotAligned();
@@ -40,7 +45,7 @@ contract ERC721M is ERC721Core {
     // >>>>>>>>>>>> [ STORAGE ] <<<<<<<<<<<<
 
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
-    address public constant vaultFactory = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
+    address public constant VAULT_FACTORY = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
     uint16 public minAllocation;
     uint16 public maxAllocation;
 
@@ -55,9 +60,9 @@ contract ERC721M is ERC721Core {
     function initialize(
         string memory name_, // Collection name ("Milady")
         string memory symbol_, // Collection symbol ("MIL")
-        uint40 _maxSupply, // Max supply (~1.099T max)
+        uint64 _maxSupply, // Max supply (~1.099T max)
         uint16 _royalty, // Percentage in basis points (420 == 4.20%)
-        uint16 _allocation, // Minimum Percentage of mint funds to AlignmentVault in basis points, minimum of 5% (777 == 7.77%)
+        uint16 _allocation, // Minimum Percentage of mint funds sent to AlignmentVault in basis points, minimum of 5% (777 == 7.77%)
         address _owner, // Collection contract owner
         address _alignedNft, // Address of NFT to configure AlignmentVault for, must have NFTX vault!
         uint80 _price, // Price (~1.2M ETH max)
@@ -73,15 +78,15 @@ contract ERC721M is ERC721Core {
 
         // Initialize ERC721Core
         _initialize(name_, symbol_, _maxSupply, _royalty, _owner, _price);
-        
+
         // Deploy AlignmentVault
         address deployedAV;
-        if (_salt == bytes32("")) deployedAV = IFactory(vaultFactory).deploy(_owner, _alignedNft, _vaultId);
-        else deployedAV = IFactory(vaultFactory).deployDeterministic(_owner, _alignedNft, _vaultId, _salt);
+        if (_salt == bytes32("")) deployedAV = IFactory(VAULT_FACTORY).deploy(_owner, _alignedNft, _vaultId);
+        else deployedAV = IFactory(VAULT_FACTORY).deployDeterministic(_owner, _alignedNft, _vaultId, _salt);
         alignmentVault = deployedAV;
         // Send initialize payment (if any) to vault
         if (msg.value > 0) {
-            (bool success,) = payable(deployedAV).call{ value: msg.value }("");
+            (bool success,) = payable(deployedAV).call{value: msg.value}("");
             if (!success) revert TransferFailed();
         }
         emit AlignmentUpdate(_allocation, _allocation);
@@ -91,65 +96,51 @@ contract ERC721M is ERC721Core {
 
     // >>>>>>>>>>>> [ MINT LOGIC ] <<<<<<<<<<<<
 
-    function _mint(address recipient, uint256 amount, address referral) internal override {
-        _mint(recipient, amount, referral, minAllocation);
+    function _mint(uint256 amount, address recipient) internal override {
+        _mint(recipient, amount, minAllocation);
     }
 
     // Solady ERC721 _mint override to implement mint funds alignment and blacklist
-    function _mint(address recipient, uint256 amount, address referral, uint16 allocation) internal {
-        // Prevent bad inputs
-        if (recipient == address(0) || amount == 0) revert Invalid();
+    function _mint(address recipient, uint256 amount, uint16 allocation) internal {
         // Ensure minter and recipient don't hold blacklisted assets
-        _enforceBlacklist(msg.sender, recipient);
-        
-        //@TODO maybe we can do this before everything else and then call super._mint
+
+        //@TODO maybe we can do this before everything else and then call core's _mint
 
         // Ensure allocation set by the user is in the range between minAllocation and maxAllocation
 
-        if(allocation < minAllocation || allocation > maxAllocation) revert Invalid();
+        if (allocation < minAllocation || allocation > maxAllocation) revert Invalid();
         // Calculate allocation
         uint256 mintAlloc = FPML.fullMulDivUp(allocation, msg.value, _DENOMINATOR_BPS);
 
         if (msg.value > 0) {
             // Send aligned amount to AlignmentVault (success is intentionally not read to save gas as it cannot fail)
             payable(alignmentVault).call{value: mintAlloc}("");
-            // If referral isn't address(0), process sending referral fee
-            // Reentrancy is handled by applying ReentrancyGuard to referral mint function [mint(address, uint256, address)]
-            if (referral != address(0) && referral != msg.sender) {
-                uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
-                (bool success, ) = payable(referral).call{value: referralAlloc}("");
-                if (!success) revert TransferFailed();
-                emit ReferralFeePaid(referral, referralAlloc);
-            }
         }
 
         // Process ERC721 mints
         // totalSupply is read once externally from loop to reduce SLOADs to save gas
-        uint256 supply = _totalSupply;
-        for (uint256 i; i < amount;) {
-            _mint(recipient, ++supply);
-            unchecked {
-                ++i;
-            }
-        }
-        unchecked {
-            _totalSupply += uint40(amount);
-        }
+        super._mint(amount, recipient);
     }
 
     // Standard mint function that supports batch minting and custom allocation
     function mint(address recipient, uint256 amount, uint16 allocation) public payable virtual mintable(amount) {
-        if (!mintOpen) revert MintClosed();
+
         if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, address(0), allocation);
+        _mint(recipient, amount, allocation);
     }
 
     // Standard batch mint with custom allocation support and referral fee support
-    function mint(address recipient, uint256 amount, address referral, uint16 allocation) public payable virtual mintable(amount) nonReentrant {
-        if (!mintOpen) revert MintClosed();
-        if (referral == msg.sender) revert Invalid();
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, referral, allocation);
+    function mint(
+        address recipient_,
+        uint256 amount_,
+        address referral_,
+        uint16 allocation_
+    ) public payable virtual mintable(amount_) nonReentrant {
+
+        if (referral_ == msg.sender || referral_ == recipient_) revert SelfReferralNotAllowed();
+        if (msg.value < (price * amount_)) revert InsufficientPayment();
+        _handleReferral(referral_);
+        _mint(recipient_, amount_, allocation_);
     }
 
     // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
@@ -171,7 +162,9 @@ contract ERC721M is ERC721Core {
         if (totalSupply() < maxSupply / 2) {
             if (newMinAllocation < _minAllocation || newMinAllocation > newMaxAllocation) revert Invalid();
             minAllocation = newMinAllocation;
-        } else newMinAllocation = _minAllocation;
+        } else {
+            newMinAllocation = _minAllocation;
+        }
         maxAllocation = newMaxAllocation;
         emit AlignmentUpdate(newMinAllocation, newMaxAllocation);
     }
@@ -193,7 +186,7 @@ contract ERC721M is ERC721Core {
         if (amount > balance) amount = balance;
 
         // Process withdrawal
-        (bool success,) = payable(recipient).call{ value: amount }("");
+        (bool success,) = payable(recipient).call{value: amount}("");
         if (!success) revert TransferFailed();
         emit Withdraw(recipient, amount);
     }
@@ -202,16 +195,17 @@ contract ERC721M is ERC721Core {
 
     // Internal handling for receive() and fallback() to reduce code length
     function _processPayment() internal override {
-        if (mintOpen) mint(msg.sender, (msg.value / price));
-        else {
-        // Calculate allocation and split paymeent accordingly
-        uint256 mintAlloc = FPML.fullMulDivUp(minAllocation, msg.value, _DENOMINATOR_BPS);
-        // Success when transferring to vault isn't checked because transfers to vault cant fail
-        payable(alignmentVault).call{ value: mintAlloc }("");
-        // Reentrancy risk is ignored here because if owner wants to withdraw that way that's their prerogative
-        // But if transfer to owner fails for any reason, it will be sent to the vault
-        (bool success,) = payable(owner()).call{ value: msg.value - mintAlloc }("");
-        if (!success) payable(alignmentVault).call{ value: msg.value - mintAlloc }("");
+        if (mintOpen) {
+            mint(msg.sender, (msg.value / price));
+        } else {
+            // Calculate allocation and split paymeent accordingly
+            uint256 mintAlloc = FPML.fullMulDivUp(minAllocation, msg.value, _DENOMINATOR_BPS);
+            // Success when transferring to vault isn't checked because transfers to vault cant fail
+            payable(alignmentVault).call{value: mintAlloc}("");
+            // Reentrancy risk is ignored here because if owner wants to withdraw that way that's their prerogative
+            // But if transfer to owner fails for any reason, it will be sent to the vault
+            (bool success,) = payable(owner()).call{value: msg.value - mintAlloc}("");
+            if (!success) payable(alignmentVault).call{value: msg.value - mintAlloc}("");
         }
     }
 

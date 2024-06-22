@@ -31,7 +31,12 @@ interface IAlignmentVaultMinimal {
 
 interface IFactory {
     function deploy(address vaultOwner, address alignedNft, uint96 vaultId) external returns (address);
-    function deployDeterministic(address vaultOwner, address alignedNft, uint96 vaultId, bytes32 salt) external returns (address);
+    function deployDeterministic(
+        address vaultOwner,
+        address alignedNft,
+        uint96 vaultId,
+        bytes32 salt
+    ) external returns (address);
 }
 
 /**
@@ -94,7 +99,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
     address public constant vaultFactory = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
     uint16 internal constant _MAX_ROYALTY_BPS = 1000;
-    uint16 internal constant _DENOMINATOR_BPS = 10000;
+    uint16 internal constant _DENOMINATOR_BPS = 10_000;
 
     EnumerableSetLib.AddressSet internal _blacklist;
     EnumerableSetLib.Uint256Set internal _customMintLists;
@@ -161,7 +166,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         alignmentVault = deployedAV;
         // Send initialize payment (if any) to vault
         if (msg.value > 0) {
-            (bool success,) = payable(deployedAV).call{ value: msg.value }("");
+            (bool success,) = payable(deployedAV).call{value: msg.value}("");
             if (!success) revert TransferFailed();
         }
         emit AlignmentUpdate(_allocation, _allocation);
@@ -233,7 +238,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         // Ensure minter and recipient don't hold blacklisted assets
         _enforceBlacklist(msg.sender, recipient);
         // Ensure allocation set by the user is in the range between minAllocation and maxAllocation
-        if(allocation < minAllocation || allocation > maxAllocation) revert Invalid();
+        if (allocation < minAllocation || allocation > maxAllocation) revert Invalid();
         // Calculate allocation
         uint256 mintAlloc = FPML.fullMulDivUp(allocation, msg.value, _DENOMINATOR_BPS);
 
@@ -244,7 +249,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             // Reentrancy is handled by applying ReentrancyGuard to referral mint function [mint(address, uint256, address)]
             if (referral != address(0) && referral != msg.sender) {
                 uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
-                (bool success, ) = payable(referral).call{value: referralAlloc}("");
+                (bool success,) = payable(referral).call{value: referralAlloc}("");
                 if (!success) revert TransferFailed();
                 emit ReferralFeePaid(referral, referralAlloc);
             }
@@ -286,7 +291,11 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Standard batch mint with referral fee support
-    function mint(address recipient, uint256 amount, address referral) public payable virtual mintable(amount) nonReentrant {
+    function mint(
+        address recipient,
+        uint256 amount,
+        address referral
+    ) public payable virtual mintable(amount) nonReentrant {
         if (!mintOpen) revert MintClosed();
         if (referral == msg.sender) revert Invalid();
         if (msg.value < (price * amount)) revert InsufficientPayment();
@@ -301,15 +310,26 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Standard batch mint with custom allocation support and referral fee support
-    function mint(address recipient, uint256 amount, address referral, uint16 allocation) public payable virtual mintable(amount) nonReentrant {
+    function mint(
+        address recipient,
+        uint256 amount,
+        address referral,
+        uint16 allocation
+    ) public payable virtual mintable(amount) nonReentrant {
         if (!mintOpen) revert MintClosed();
         if (referral == msg.sender) revert Invalid();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, referral, allocation);
     }
-    
+
     // Whitelisted mint using merkle proofs
-    function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) public payable virtual mintable(amount) nonReentrant {
+    function customMint(
+        bytes32[] calldata proof,
+        uint8 listId,
+        address recipient,
+        uint40 amount,
+        address referral
+    ) public payable virtual mintable(amount) nonReentrant {
         CustomMint memory mintData = customMintData[listId];
         if (mintData.root == bytes32("")) revert Invalid();
         if (amount > mintData.supply) revert MintCap();
@@ -375,11 +395,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     // Set royalty receiver and royalty fee for a specific tokenId
-    function setRoyaltiesForId(
-        uint256 tokenId,
-        address recipient,
-        uint96 royaltyFee
-    ) external virtual onlyOwner {
+    function setRoyaltiesForId(uint256 tokenId, address recipient, uint96 royaltyFee) external virtual onlyOwner {
         if (royaltyFee > _MAX_ROYALTY_BPS) revert Invalid();
         // Revert if royalties are disabled
         (address receiver,) = royaltyInfo(0, 0);
@@ -395,7 +411,13 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Set arbitrary custom mint lists using merkle trees, can be reconfigured
     // NOTE: Cannot retroactively reduce mintable amount below minted supply for custom mint list
-    function setCustomMint(bytes32 root, uint8 listId, uint40 amount, uint40 claimable, uint80 newPrice) external virtual onlyOwner {
+    function setCustomMint(
+        bytes32 root,
+        uint8 listId,
+        uint40 amount,
+        uint40 claimable,
+        uint80 newPrice
+    ) external virtual onlyOwner {
         if (!_customMintLists.contains(listId)) _customMintLists.add(listId);
         CustomMint memory mintData = customMintData[listId];
         // Validate adjustment doesn't decrease amount below custom minted count
@@ -403,15 +425,18 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         uint40 supply;
         unchecked {
             // Set amount as supply if new custom mint
-            if (mintData.issued == 0) supply = amount;
+            if (mintData.issued == 0) {
+                supply = amount;
+            }
             // Properly adjust existing supply
             else {
-                supply = amount >= mintData.issued ? 
-                    mintData.supply + (amount - mintData.issued) :
-                    mintData.supply - (mintData.issued - amount);
+                supply = amount >= mintData.issued
+                    ? mintData.supply + (amount - mintData.issued)
+                    : mintData.supply - (mintData.issued - amount);
             }
         }
-        customMintData[listId] = CustomMint({ root: root, issued: amount, claimable: claimable, supply: supply, price: newPrice });
+        customMintData[listId] =
+            CustomMint({root: root, issued: amount, claimable: claimable, supply: supply, price: newPrice});
         emit CustomMintConfigured(root, listId, amount);
     }
 
@@ -446,10 +471,10 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             delete customMintData[listId];
             emit CustomMintDeleted(listId);
         } else {
-            customMintData[listId] = CustomMint({ 
-                root: bytes32(""), 
-                issued: mintData.issued - mintData.supply, 
-                claimable: 0, 
+            customMintData[listId] = CustomMint({
+                root: bytes32(""),
+                issued: mintData.issued - mintData.supply,
+                claimable: 0,
                 supply: 0,
                 price: 0
             });
@@ -490,7 +515,9 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         if (totalSupply() < maxSupply / 2) {
             if (newMinAllocation < _minAllocation || newMinAllocation > newMaxAllocation) revert Invalid();
             minAllocation = newMinAllocation;
-        } else newMinAllocation = _minAllocation;
+        } else {
+            newMinAllocation = _minAllocation;
+        }
         maxAllocation = newMaxAllocation;
         emit AlignmentUpdate(newMinAllocation, newMaxAllocation);
     }
@@ -520,7 +547,7 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         if (amount > balance) amount = balance;
 
         // Process withdrawal
-        (bool success,) = payable(recipient).call{ value: amount }("");
+        (bool success,) = payable(recipient).call{value: amount}("");
         if (!success) revert TransferFailed();
         emit Withdraw(recipient, amount);
     }
@@ -529,16 +556,17 @@ contract ERC721M is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // Internal handling for receive() and fallback() to reduce code length
     function _processPayment() internal {
-        if (mintOpen) mint(msg.sender, (msg.value / price));
-        else {
+        if (mintOpen) {
+            mint(msg.sender, (msg.value / price));
+        } else {
             // Calculate allocation and split paymeent accordingly
             uint256 mintAlloc = FPML.fullMulDivUp(minAllocation, msg.value, _DENOMINATOR_BPS);
             // Success when transferring to vault isn't checked because transfers to vault cant fail
-            payable(alignmentVault).call{ value: mintAlloc }("");
+            payable(alignmentVault).call{value: mintAlloc}("");
             // Reentrancy risk is ignored here because if owner wants to withdraw that way that's their prerogative
             // But if transfer to owner fails for any reason, it will be sent to the vault
-            (bool success,) = payable(owner()).call{ value: msg.value - mintAlloc }("");
-            if (!success) payable(alignmentVault).call{ value: msg.value - mintAlloc }("");
+            (bool success,) = payable(owner()).call{value: msg.value - mintAlloc}("");
+            if (!success) payable(alignmentVault).call{value: msg.value - mintAlloc}("");
         }
     }
 

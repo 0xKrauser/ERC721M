@@ -15,9 +15,7 @@ import {MerkleProofLib} from "../lib/solady/src/utils/MerkleProofLib.sol";
 
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
-
-
-// >>>>>>>>>>>> [ INTERFACES ] <<<<<<<<<<<<
+// import {console2} from "../lib/forge-std/src/Console2.sol";
 
 interface IAsset {
     function balanceOf(address holder) external returns (uint256);
@@ -41,6 +39,9 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /// @dev Input parameter doesn't satisfy a given condition.
     error Invalid();
 
+    /// @dev Self-referral to either msg.sender or recipient is not allowed.
+    error SelfReferralNotAllowed();
+
     /// @dev Cannot mint a token beyond maxSupply.
     error MintCap();
 
@@ -56,10 +57,28 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /// @dev Transfer of ether to an address failed.
     error TransferFailed();
 
-    /// @dev msg.sender/recipient is not eligible to claim any mint allocation for a given CustomMint.
-    error NothingToClaim();
+    /// @dev List is paused
+    error ListPaused();
 
-    /// @dev msg.sender/recipient can't claim more than the allowed claimable supply for a given CustomMint in a single operation.
+    /// @dev List is deleted
+    error ListDeleted();
+
+    /// @dev List does not exist
+    error ListDoesNotExist();
+
+    // @TODO
+    error ReservedExceedsMaxSupply();
+
+    // @TODO
+    error BreaksReservedSupply();
+
+    /// @dev msg.sender/recipient is not eligible to claim any mint allocation for a given MintList.
+    error NotAllowedToClaim();
+
+    /**
+     * @dev msg.sender/recipient can't claim more than the allowed claimable supply
+     * for a given MintList in a single operation.
+     */
     error ExcessiveClaim();
 
     /// @dev Cannot set royalties when they have previously been disabled.
@@ -99,8 +118,11 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      */
     event BatchPermanentURI(uint256 indexed _fromTokenId, uint256 indexed _toTokenId);
 
-    /// @dev Emitted when the minting process is open.    
-    event MintOpen();
+    /**
+     * @dev Emitted when the minting process is open.
+     * @param _status The status, true means mint is open.
+     */ 
+    event MintOpen(bool indexed _status);
 
     /**
      * @dev Emitted when the royalty feature is disabled by setting address(0) as receiver.
@@ -126,7 +148,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @dev Emitted when the supply is updated.
      * @param supply The new supply.
      */
-    event SupplyUpdate(uint40 indexed supply);
+    event SupplyUpdate(uint64 indexed supply);
 
     /**
      * @dev Emitted when the blacklist is updated.
@@ -178,45 +200,55 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     event RoyaltyUpdate(uint256 indexed tokenId, address indexed receiver, uint96 indexed royaltyFee);
 
     /**
-     * @dev Emitted when a new custom mint list is created.
-     * @param _minter The address of the minter.
-     * @param _listId The ID of the custom mint list.
-     * @param _amount The amount of tokens minted.
+     * @notice Emitted when the minting range is updated.
+     * @param start_ The new start timestamp of the public mint.
+     * @param end_ The new end timestamp of the public mint.
      */
-    event CustomMinted(address indexed _minter, uint8 indexed _listId, uint40 indexed _amount);
+    event MintRangeUpdate(uint256 indexed start_, uint256 indexed end_);
 
     /**
-     * @dev Emitted when a custom mint list is deleted.
-     * @param _listId The ID of the custom mint list.
-     */ 
-    event CustomMintDeleted(uint8 indexed _listId);
+     * @dev Emitted when the maximum claimable tokens per user are updated.
+     * @param claimable_ The new amount of tokens available per address.
+     */
+    event UserClaimableUpdate(uint256 indexed claimable_);
+
+    /**
+     * @dev Emitted when the default unit amount of tokens minted is updated.
+     * @param unit_ The new amount of tokens you mint for every 1 you pay.
+     */
+    event UnitUpdate(uint64 indexed unit_);
+
+    /**
+     * @dev Emitted when someone mints from a list.
+     * @param minter_ The address of the minter.
+     * @param listId_ The ID of the custom mint list.
+     * @param amount_ The amount of tokens minted.
+     */
+    event ListMinted(address indexed minter_, uint8 indexed listId_, uint256 indexed amount_);
 
     /**
      * @dev Emitted when a custom mint list is disabled.
      * @param _listId The ID of the custom mint list.
+     * @param _paused The paused status of the custom mint list.
      */
-    event CustomMintDisabled(uint8 indexed _listId);
+    event MintListStatus(uint8 indexed _listId, bool indexed _paused);
 
-    event CustomMintPriceUpdate(uint8 indexed _listId, uint80 indexed price);
-
-    /**
-     * @dev Emitted when a custom mint list is reenabled.
+        /**
+     * @dev Emitted when a custom mint list is deleted.
      * @param _listId The ID of the custom mint list.
-     * @param _claimable The amount of tokens claimable. As we disable by setting claimable to 0, 
-     * we need to reenable by setting it to a non-zero value.
+     * @custom:unique
      */
-    event CustomMintReenabled(uint8 indexed _listId, uint40 indexed _claimable);
+    event MintListDeleted(uint8 indexed _listId);
 
     /**
      * @dev Emitted when a custom mint list is configured.
-     * @param _merkleRoot The root of the merkle tree.
      * @param _listId The ID of the custom mint list.
-     * @param _amount The amount of tokens mintable.
+     * @param _list The configuration of the list.
      */
     //@TODO * @param _claimable The amount of tokens available per address.
     //@TODO * @param _price The price per token in wei.
 
-    event CustomMintConfigured(bytes32 indexed _merkleRoot, uint8 indexed _listId, uint40 indexed _amount);
+    event MintListUpdate(uint8 indexed _listId, MintList _list);
 
     // >>>>>>>>>>>> [ STORAGE ] <<<<<<<<<<<<
 
@@ -231,12 +263,18 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param supply The total supply of tokens.
      * @param price The price of each token.
      */
-    struct CustomMint {
+
+    struct MintList {
         bytes32 root;
-        uint40 issued;
-        uint40 claimable;
-        uint40 supply;
-        uint80 price;
+        uint64 userSupply;
+        uint64 maxSupply;
+        uint64 unit;
+        uint32 start;
+        uint32 end;
+        uint128 price;
+        bool reserved;
+        bool paused;
+        // address tokenAddress;
     }
 
     //@TODO opinionated? might consider to move it in factory
@@ -283,19 +321,25 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     /**
      * @dev Contract URI for the collection.
-     * e.g. "https://miladymaker.net/contract", "ipfs://QmXyZ/contract.json", "ar://QmXyZ/contract.json", or a stringified JSON object.
+     * e.g. "ipfs://QmXyZ/contract.json", "ar://QmXyZ/contract.json", or a stringified JSON object.
      * @custom:documentation https://docs.opensea.io/docs/contract-level-metadata
      */
     string internal _contractURI;
 
     /// @dev Maximum supply of tokens that can be minted.
-    uint40 public maxSupply;
+    uint64 public maxSupply;
 
     /// @dev Total supply of tokens minted.
-    uint40 internal _totalSupply;
+    uint64 internal _totalSupply;
+
+    /// @dev Total supply of tokens reserved for the custom lists.
+    uint64 internal _reservedSupply;
 
     /// @dev Price of minting a single token.
     uint80 public price;
+
+    /// @dev current count of custom mint lists
+    uint8 public lists;
 
     /**
      * @notice Percentage of the mint value that is paid to the referrer.
@@ -308,27 +352,69 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     /// @notice indicates that the minting process is open
     bool public mintOpen;
+
+    /// @notice timestamp for the start of the minting process
+    uint32 public start;
+
+    /// @notice timestamp for the end of the minting process
+    uint32 public end;
+
+    uint64 public unit;
+
+    uint64 public perUserSupply;
     
     /// @dev Mapping of token IDs to their respective tokenURIs, optional override.
-    mapping(uint256 tokenId => string) private _tokenURIs;
+    mapping(uint256 tokenId => string uri) private _tokenURIs;
 
     /// @dev Mapping of token IDs to their respective permanentURI state.
-    mapping(uint256 tokenId => bool) private _permanentTokenURIs;
+    mapping(uint256 tokenId => bool isPermanent) private _permanentTokenURIs;
     
-    /// @dev Mapping of listId to CustomMint data.
-    mapping(uint8 listId => CustomMint) public customMintData;
+    /// @dev Mapping of listId to MintList data.
+    mapping(uint8 listId => MintList list) public mintLists;
+
+    /// @dev Mapping of listId to minted list supply.
+    mapping(uint8 listId => uint64 supply) public listSupply;
 
     /// @dev Mapping of user to listId to already claimed amount.
-    mapping(address user => mapping(uint8 listId => uint256 claimed)) public customClaims;
+    mapping(address user => mapping(uint8 listId => uint256 claimed)) public claimedList;
 
     // >>>>>>>>>>>> [ MODIFIERS ] <<<<<<<<<<<<
 
     /**
      * @dev Checks if amount does not exceed maxSupply.
-     * @param amount The amount to be minted.
+     * @param amount_ The amount to be minted.
      */
-    modifier mintable(uint256 amount) {
-        if (_totalSupply + amount > maxSupply) revert MintCap();
+    modifier mintable(uint256 amount_) {
+        if (!mintOpen) revert MintClosed();
+        uint256 mulAmount = amount_ * unit;
+
+        if (_totalSupply + mulAmount > maxSupply) revert MintCap();
+        if (claimedList[msg.sender][0] + mulAmount > perUserSupply) revert ExcessiveClaim();
+        if(mulAmount > maxSupply - _totalSupply - _reservedSupply) revert BreaksReservedSupply();
+
+        if(start != 0 && block.timestamp < start) revert MintClosed();
+        if(end != 0 && block.timestamp > end) revert MintClosed();
+        _;
+    }
+
+    /**
+     * @dev Checks if the mint does not exceed the maxSupply of its MintList.
+     * @param listId_ The ID of the custom mint list.
+     * @param amount_ The amount to be minted.
+     */
+    modifier listMintable(uint8 listId_, uint256 amount_) {        
+        MintList memory list = mintLists[listId_];
+        if (list.paused) revert ListPaused();
+        uint256 mulAmount = amount_ * list.unit;
+        if (claimedList[msg.sender][listId_] + mulAmount > list.userSupply) revert ExcessiveClaim();
+
+        if (_totalSupply + mulAmount > maxSupply) revert MintCap();
+        if (listSupply[listId_] + mulAmount > list.maxSupply) revert MintCap();
+        
+        if(!list.reserved && mulAmount > maxSupply - _totalSupply - _reservedSupply) revert BreaksReservedSupply();
+
+        if(list.start != 0 && block.timestamp < list.start) revert MintClosed();
+        if(list.end != 0 && block.timestamp > list.end) revert MintClosed();
         _;
     }
 
@@ -350,7 +436,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     function initialize(
         string memory name_,
         string memory symbol_,
-        uint40 maxSupply_,
+        uint64 maxSupply_,
         uint16 royalty_,
         address owner_,
         uint80 price_
@@ -364,14 +450,15 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param name_ The name of the collection. e.g. "Milady Maker"
      * @param symbol_ The symbol of the collection. e.g. "MILADY"
      * @param maxSupply_ The maximum supply of tokens that can be minted. (~1.099T max)
-     * @param royalty_ The percentage of the mint value that is paid to the referrer. (420 == 420 / 10000 == 4.20%) Max 10.00%
+     * @param royalty_ The percentage of the mint value that is paid to the referrer. 
+     * e.g. (420 == 420 / 10000 == 4.20%) Max 10.00%
      * @param owner_ The owner of the collection contract.
      * @param price_ The price of minting a single token. (~1.2M ETH max)
      */
     function _initialize(
         string memory name_, // Collection name ("Milady")
         string memory symbol_, // Collection symbol ("MIL")
-        uint40 maxSupply_, // Max supply (~1.099T max)
+        uint64 maxSupply_, // Max supply (~1.099T max)
         uint16 royalty_, // Percentage in basis points (420 == 4.20%)
         address owner_, // Collection contract owner
         uint80 price_ // Price (~1.2M ETH max)
@@ -386,6 +473,11 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         _symbol = symbol_;
         maxSupply = maxSupply_;
         price = price_;
+        
+        unit = 1;
+        start = 0;
+        end = 0;
+        perUserSupply = maxSupply;
 
         emit ContractCreated(name_, symbol_);
         emit RoyaltyUpdate(0, owner_, royalty_);
@@ -443,7 +535,9 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
         string memory newBaseURI = baseURI();
 
-        return (bytes(newBaseURI).length > 0 ? string(abi.encodePacked(newBaseURI, tokenId.toString(), _fileExtension)) : "");
+        return bytes(newBaseURI).length > 0 ? 
+            string(abi.encodePacked(newBaseURI, tokenId.toString(), _fileExtension)) : 
+            "";
     }
 
     /**
@@ -455,12 +549,15 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     /**
-     * @dev Override to add ERC4906 and royalty interface. ERC721, ERC721Metadata, and ERC721x are present in the ERC721x override
+     * @dev Override to add ERC4906 and royalty interface. 
+     * ERC721, ERC721Metadata, and ERC721x are present in the ERC721x override
      * @param interfaceId The ID of the standard interface you want to check for.
      * @return supported bool representing whether the interface is supported.
      */
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721x, ERC2981) returns (bool) {
-        return interfaceId == ERC4906_INTERFACE_ID || ERC721x.supportsInterface(interfaceId) || ERC2981.supportsInterface(interfaceId);
+        return interfaceId == ERC4906_INTERFACE_ID || 
+            ERC721x.supportsInterface(interfaceId) || 
+            ERC2981.supportsInterface(interfaceId);
     }
 
     /**
@@ -471,18 +568,11 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         return _blacklist.values();
     }
 
-    /**
-     * @dev list of custom mint lists, used to allow whitelisted mints using merkle proofs
-     * @return customMintLists an array of custom mint list IDs.
-     */
-    function getCustomMintListIds() external view virtual returns (uint256[] memory) {
-        return _customMintLists.values();
-    }
-
     // >>>>>>>>>>>> [ INTERNAL FUNCTIONS ] <<<<<<<<<<<<
 
     /**
-     * @dev Blacklist function to prevent mints to and from holders of prohibited assets, applied both on minter and recipient
+     * @dev Blacklist function to prevent mints to and from holders of prohibited assets, 
+     * applied both on minter and recipient
      * @param minter The address of the minter.
      * @param recipient The address of the recipient.
      */
@@ -504,42 +594,42 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /**
      * @notice Internal mint function that supports batch minting.
      * @dev Implements referral fee and blacklist logic.
-     * @param recipient The address of the recipient.
-     * @param amount The amount of tokens to mint.
-     * @param referral The address of the referrer.
+     * @param recipient_ The address of the recipient.
+     * @param amount_ The amount_ of tokens to mint.
+     * @param referral_ The address of the referrer.
      */
-    function _mint(address recipient, uint256 amount, address referral) internal virtual {
+    function _mint(address recipient_, uint256 amount_, address referral_) internal virtual {
         //@TODO if recipient is not msg.sender consider emitting another event
         
-        // Prevent bad inputs
-        if (recipient == address(0) || amount == 0) revert Invalid();
-        // Ensure minter and recipient don't hold blacklisted assets
-        _enforceBlacklist(msg.sender, recipient);
+        _handleReferral(referral_);
 
-        if (msg.value > 0) {
-            // If referral isn't address(0), process sending referral fee
-            // Reentrancy is handled by applying ReentrancyGuard to referral mint function [mint(address, uint256, address)]
-            //@TODO stash and then withdraw might be better for gas?
-            //@TODO referral discounts? 
-            if (referral != address(0) && referral != msg.sender) {
-                uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
-                (bool success, ) = payable(referral).call{value: referralAlloc}("");
-                if (!success) revert TransferFailed();
-                emit ReferralFeePaid(referral, referralAlloc);
-            }
+        uint256 mulAmount = amount_ * unit;
+        
+        unchecked {
+            claimedList[msg.sender][0] += mulAmount;
         }
 
         // Process ERC721 mints
-        // totalSupply is read once externally from loop to reduce SLOADs to save gas
+        _mint(mulAmount, recipient_);
+    }
+    
+    function _mint(uint256 amount_, address recipient_) internal virtual { 
+        // inverted parameter order to avoid overriding mint(address, uint256)
+
+        // Prevent bad inputs
+        if (recipient_ == address(0) || amount_ == 0) revert Invalid();
+        // Ensure minter and recipient don't hold blacklisted assets
+        _enforceBlacklist(msg.sender, recipient_);
+
         uint256 supply = _totalSupply;
-        for (uint256 i; i < amount;) {
-            _mint(recipient, ++supply);
+        for (uint256 i; i < amount_;) {
+            _mint(recipient_, ++supply);
             unchecked {
                 ++i;
             }
         }
         unchecked {
-            _totalSupply += uint40(amount);
+            _totalSupply += uint64(amount_);
         }
     }
 
@@ -548,7 +638,6 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @dev Standard single-unit mint to msg.sender (implemented for max scannner compatibility)
      */
     function mint() public payable virtual mintable(1) {
-        if (!mintOpen) revert MintClosed();
         if (msg.value < price) revert InsufficientPayment();
         _mint(msg.sender, 1, address(0));
     }
@@ -559,7 +648,6 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param amount The amount of tokens to mint.
      */
     function mint(uint256 amount) public payable virtual mintable(amount) {
-        if (!mintOpen) revert MintClosed();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(msg.sender, amount, address(0));
     }
@@ -571,7 +659,6 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param amount The amount of tokens to mint.
      */
     function mint(address recipient, uint256 amount) public payable virtual mintable(amount) {
-        if (!mintOpen) revert MintClosed();
         if (msg.value < (price * amount)) revert InsufficientPayment();
         _mint(recipient, amount, address(0));
     }
@@ -580,43 +667,71 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @notice Mint the amount of tokens to the recipient, provided that enough ether is sent
      * Sends a percentage of the mint value to the referrer.
      * @dev Standard batch mint with referral fee support
-     * @param recipient The address of the recipient.
-     * @param amount The amount of tokens to mint.
-     * @param referral The address of the referrer.
+     * @param recipient_ The address of the recipient.
+     * @param amount_ The amount of tokens to mint.
+     * @param referral_ The address of the referrer.
      */
-    function mint(address recipient, uint256 amount, address referral) public payable virtual mintable(amount) nonReentrant {
-        if (!mintOpen) revert MintClosed();
-        if (referral == msg.sender || referral == recipient) revert Invalid();
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, referral);
+    function mint(
+        address recipient_, 
+        uint256 amount_, 
+        address referral_
+    ) public payable virtual mintable(amount_) nonReentrant {
+        if (referral_ == msg.sender || referral_ == recipient_) revert SelfReferralNotAllowed();
+        if (msg.value < (price * amount_)) revert InsufficientPayment();
+        _mint(recipient_, amount_, referral_);
     }
 
     /**
-     * @notice Whitelisted mint using merkle proofs
-     * @dev Allows for custom minting using merkle proofs for whitelisted addresses
-     * @param proof The merkle proof for the msg.sender address
-     * @param listId The ID of the custom mint list
-     * @param recipient The address of the recipient
-     * @param amount The amount of tokens to mint
-     * @param referral The address of the referrer
+     * @notice Mint the amount of tokens to the recipient, provided that enough ether is sent
+     * Sends a percentage of the mint value to the referrer.
+     * @dev Standard batch mint with referral fee support
+     * @param proof_ The address of the recipient.
+     * @param listId_ The address of the recipient.
+     * @param recipient_ The address of the recipient.
+     * @param amount_ The amount of tokens to mint.
+     * @param referral_ The address of the referrer.
      */
-    function customMint(bytes32[] calldata proof, uint8 listId, address recipient, uint40 amount, address referral) public payable virtual mintable(amount) nonReentrant {
-        //@TODO maybe give the choice of basing the mint on the sender or the recipient?
-        CustomMint memory mintData = customMintData[listId];
-        if (mintData.root == bytes32("")) revert Invalid();
-        if (amount > mintData.supply) revert MintCap();
-        if (customClaims[msg.sender][listId] + amount > mintData.claimable) revert ExcessiveClaim();
-        if (msg.value < amount * mintData.price) revert InsufficientPayment();
+    function mint(
+        bytes32[] calldata proof_,
+        uint8 listId_,
+        address recipient_, 
+        uint64 amount_, 
+        address referral_
+    ) public payable virtual listMintable(listId_, amount_) nonReentrant {
+        if (referral_ == msg.sender || referral_ == recipient_) revert SelfReferralNotAllowed();
+        
+        MintList memory list = mintLists[listId_];
+        if (msg.value < amount_ * list.price) revert InsufficientPayment();
 
+        //@TODO maybe give the choice of basing the proof verification on the sender or the recipient?
         bytes32 leaf = keccak256(bytes.concat(keccak256(bytes.concat(abi.encode(msg.sender)))));
-        if (!MerkleProofLib.verifyCalldata(proof, mintData.root, leaf)) revert NothingToClaim();
+        if (!MerkleProofLib.verifyCalldata(proof_, list.root, leaf)) revert NotAllowedToClaim();
+
+        _handleReferral(referral_);
+
+        uint64 mulAmount = amount_ * list.unit;
 
         unchecked {
-            customClaims[msg.sender][listId] += amount;
-            customMintData[listId].supply -= amount;
+            claimedList[msg.sender][listId_] += mulAmount;
+            listSupply[listId_] += mulAmount;
         }
-        _mint(recipient, amount, referral);
-        emit CustomMinted(msg.sender, listId, amount);
+
+        _mint(mulAmount, recipient_);
+        emit ListMinted(msg.sender, listId_, mulAmount);
+    }
+
+    function _handleReferral(address referral_) internal virtual {
+        if (msg.value > 0 && referral_ != address(0)) {
+            // If referral isn't address(0) and mint isn't free, process sending referral fee
+            // Reentrancy is handled by applying ReentrancyGuard to referral mint function 
+            // [mint(address, uint256, address)]
+            //@TODO stash and then withdraw might be better for gas?
+            //@TODO referral discounts? 
+            uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
+            (bool success, ) = payable(referral_).call{value: referralAlloc}("");
+            if (!success) revert TransferFailed();
+            emit ReferralFeePaid(referral_, referralAlloc);
+        }
     }
     
     // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
@@ -666,7 +781,8 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     /**
      * @notice Disables royalties for the contract.
-     * @dev Irreversibly disable royalties by resetting tokenId 0 royalty to (address(0), 0) and deleting default royalty info
+     * @dev Irreversibly disable royalties by resetting tokenId 0 royalty to (address(0), 0) 
+     * and deleting default royalty info
      */
     function disableRoyalties() external virtual onlyOwner {
         _deleteDefaultRoyalty();
@@ -682,90 +798,75 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /**
      * @notice Configures a custom mint list with a merkle root, mintable amount, and price.
      * @dev If list already exists, adjusts the configuration to the new values.
-     * @param root The root hash of the merkle tree.
-     * @param listId The ID of the custom mint list.
-     * @param amount The amount of tokens mintable.
-     * @param claimable The amount of tokens claimable per address.
-     * @param newPrice The price per token in wei.
+     * @param listId_ The ID of the custom mint list.
+     * @param list_ The list configuration as a struct.
      */
-    function setCustomMint(bytes32 root, uint8 listId, uint40 amount, uint40 claimable, uint80 newPrice) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) _customMintLists.add(listId);
-        CustomMint memory mintData = customMintData[listId];
-        // Validate adjustment doesn't decrease amount below custom minted count
-        if (mintData.issued != 0 && mintData.issued - mintData.supply > amount) revert Invalid();
-        uint40 supply;
-        unchecked {
-            // Set amount as supply if new custom mint
-            if (mintData.issued == 0) supply = amount;
-            // Properly adjust existing supply
-            else {
-                supply = amount >= mintData.issued ? 
-                    mintData.supply + (amount - mintData.issued) :
-                    mintData.supply - (mintData.issued - amount);
+    function setMintList(
+        uint8 listId_, 
+        MintList calldata list_
+    ) external virtual onlyOwner validateMintList(listId_, list_) {
+        if(listId_ > lists) revert ListDoesNotExist();
+    
+        uint8 id = listId_ == 0 ? lists++ : listId_; // If listId_ is 0, increment listCount and create new list
+
+        MintList memory list = mintLists[listId_]; 
+        if(listId_ != 0 && list.userSupply == 0) revert ListDeleted();
+        updateReservedSupply(listId_, list.reserved, list_.reserved, list.maxSupply, list_.maxSupply);
+
+        mintLists[listId_] = list_;
+        emit MintListUpdate(id, list_);
+    }
+
+    modifier validateMintList(uint8 listId_, MintList calldata list_) {
+        if(list_.maxSupply == 0 || list_.userSupply == 0 || list_.unit == 0) revert Invalid();
+        if (list_.maxSupply < listSupply[listId_]) revert Invalid();
+        if (list_.end != 0 && list_.end < list_.start) revert Invalid(); // Consider using more specific errors
+        _;
+    }
+
+    function updateReservedSupply(
+        uint8 listId_, 
+        bool currentReserved_, 
+        bool newReserved_, 
+        uint64 currentMaxSupply_, 
+        uint64 newMaxSupply_
+    ) internal {
+        if (newReserved_) {
+            if (newMaxSupply_ > currentMaxSupply_) {
+                _reservedSupply += newMaxSupply_ - currentMaxSupply_;
+                if (_reservedSupply > maxSupply) revert ReservedExceedsMaxSupply();
+            } else {
+                _reservedSupply -= currentMaxSupply_ - newMaxSupply_;
             }
+        } else if (currentReserved_) {
+                uint64 alreadyMinted = listSupply[listId_];
+                _reservedSupply -= currentMaxSupply_ - alreadyMinted;
         }
-        customMintData[listId] = CustomMint({ root: root, issued: amount, claimable: claimable, supply: supply, price: newPrice });
-        emit CustomMintConfigured(root, listId, amount);
     }
 
     /**
-     * @notice Disables a custom mint list.
+     * @notice Pauses or unpauses a custom mint list.
      * @dev Reduces claimable supply for custom list to 0 thus disabling it.
-     * @param listId The ID of the custom mint list.
+     * @param listId_ The ID of the custom mint list.
      */
-    function disableCustomMint(uint8 listId) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) revert Invalid();
-        customMintData[listId].claimable = 0;
-        emit CustomMintDisabled(listId);
-    }
-
-    /**
-     * @notice Reenables a custom mint list.
-     * @dev Reenables a custom mint list by setting claimable supply to a non-zero value.
-     * @param listId The ID of the custom mint list.
-     * @param claimable The amount of tokens claimable. As we disable by setting claimable to 0,
-     */
-    function reenableCustomMint(uint8 listId, uint40 claimable) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) revert Invalid();
-        uint40 issued = customMintData[listId].issued;
-        claimable = claimable <= issued ? claimable : issued;
-        customMintData[listId].claimable = claimable;
-        emit CustomMintReenabled(listId, claimable);
-    }
-
-    /**
-     * @notice Updates the price for a custom mint list.
-     * @param listId The ID of the custom mint list.
-     * @param newPrice The new price per token in wei.     
-     */
-    function repriceCustomMint(uint8 listId, uint80 newPrice) external virtual onlyOwner {
-        if (!_customMintLists.contains(listId)) revert Invalid();
-        customMintData[listId].price = newPrice;
-        emit CustomMintPriceUpdate(listId, newPrice);
+    function toggleMintList(uint8 listId_) external virtual onlyOwner {
+        if(listId_ == 0 || listId_ > lists) revert ListDoesNotExist();
+        MintList storage listData = mintLists[listId_];
+        if (listData.userSupply == 0) revert ListDeleted();
+        listData.paused = !listData.paused;
+        emit MintListUpdate(listId_, listData);
     }
 
     /**
      * @notice Deletes a custom mint list.
-     * @dev Deletes a custom mint list by removing it from the custom mint lists set.
-     * Or by setting it to 0 if it has been partially minted.
-     * @param listId The ID of the custom mint list.
+     * @param listId_ The ID of the custom mint list.
      */
-    function nukeCustomMint(uint8 listId) external virtual onlyOwner {
-        CustomMint memory mintData = customMintData[listId];
-        if (mintData.issued == mintData.supply) {
-            if (_customMintLists.contains(listId)) _customMintLists.remove(listId);
-            delete customMintData[listId];
-            emit CustomMintDeleted(listId);
-        } else {
-            customMintData[listId] = CustomMint({ 
-                root: bytes32(""), 
-                issued: mintData.issued - mintData.supply, 
-                claimable: 0, 
-                supply: 0,
-                price: 0
-            });
-            emit CustomMintConfigured(bytes32(""), listId, 0);
-        }
+    function deleteMintList(uint8 listId_) external virtual onlyOwner {
+        if(listId_ == 0 || listId_ > lists) revert ListDoesNotExist();
+        MintList storage listData = mintLists[listId_];
+        if (listData.userSupply == 0) revert ListDeleted();
+        listData.userSupply = 0;
+        emit MintListDeleted(listId_);
     }
 
     // >>>> [ SETTER FUNCTIONS ] <<<<
@@ -773,16 +874,30 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /**
      * @notice Opens the minting process.
      */
-    function openMint() external virtual onlyOwner {
-        mintOpen = true;
-        emit MintOpen();
+    function setMintOpen(bool open_) external virtual onlyOwner {
+        mintOpen = open_;
+        emit MintOpen(open_);
     }
 
-    // @TODO: pause mint? close mint?
+    function setMintRange(uint32 start_, uint32 end_) external virtual onlyOwner {
+        if (start_ > end_) revert Invalid();
+        if(start == 0 && start != start_) mintOpen = true; // Open minting if it wasn't already
+        start = start_;
+        end = end_;
+        emit MintRangeUpdate(start_, end_);
+    }
 
-    // @TODO: time based mint open/close?
+    function setClaimableUserSupply(uint64 claimable_) external virtual onlyOwner {
+        if (claimable_ == 0) revert Invalid();
+        perUserSupply = claimable_;
+        emit UserClaimableUpdate(claimable_);
+    }
 
-    // @TODO: might need to add a maximum per address?
+    function setUnit(uint64 unit_) external virtual onlyOwner {
+        if (unit_ == 0) revert Invalid();
+        unit = unit_;
+        emit UnitUpdate(unit_);
+    }
 
     // @TODO: shouldn't blacklisted also be enforced on transfer?
 
@@ -814,9 +929,9 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * If newMaxSupply is less than the current supply, the function will revert.
      * If minting has already started and newMaxSupply is greater than current maxSupply, the function will revert.
      */
-    function setSupply(uint40 newMaxSupply) external virtual onlyOwner {
-        uint256 currentSupply = totalSupply();
-        if (newMaxSupply > maxSupply && currentSupply != 0 || newMaxSupply <= currentSupply) revert Invalid();
+    function setSupply(uint64 newMaxSupply) external virtual onlyOwner {
+        if (newMaxSupply > maxSupply && _totalSupply != 0 || newMaxSupply < _totalSupply + _reservedSupply) 
+            revert Invalid();
         maxSupply = newMaxSupply;
         emit SupplyUpdate(newMaxSupply);
     }
@@ -926,7 +1041,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     /**
-     * @notice Rescue ERC20 tokens from the contract.
+     * @dev function to retrieve erc20 from the contract
      * @param addr The address of the ERC20 token.
      * @param recipient The address to which the tokens are transferred.
      */

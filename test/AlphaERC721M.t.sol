@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.23;
 
 import "../lib/forge-std/src/Test.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
-import "../src/ERC721Core.sol";
-import "../src/ERC721M.sol";
+import {ERC721Core} from "../src/ERC721Core.sol";
+import {IAlignmentVaultMinimal,ERC721M} from "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/solady/src/auth/Ownable.sol";
 
@@ -23,16 +23,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         vm.createSelectFork("sepolia");
         template = new ERC721M();
         template.initialize(
-            "ERC721M Test",
-            "ERC721M",
-            100,
-            500,
-            2000,
-            address(this),
-            address(nft),
-            0.01 ether,
-            21,
-            bytes32("")
+            "ERC721M Test", "ERC721M", 100, 500, 2000, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );
         template.setBaseURI("https://miya.wtf/api/", "");
         template.setContractURI("https://miya.wtf/api/contract.json");
@@ -48,24 +39,15 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     function testInitialize() public {
         manualInit = new ERC721M();
         manualInit.initialize(
-            "ERC721M Test",
-            "ERC721M",
-            100,
-            500,
-            2000,
-            address(this),
-            address(nft),
-            0.01 ether,
-            21,
-            bytes32("")
+            "ERC721M Test", "ERC721M", 100, 500, 2000, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );
         manualInit.setBaseURI("https://miya.wtf/api/", "");
         manualInit.setContractURI("https://miya.wtf/api/contract.json");
-        require(manualInit.minAllocation() == 2000);
+        assertEq(manualInit.minAllocation(), 2000);
         (address recipient, uint256 royalty) = manualInit.royaltyInfo(0, 1 ether);
-        require(recipient == address(this));
-        require(royalty == 0.05 ether);
-        require(IAlignmentVaultMinimal(manualInit.alignmentVault()).alignedNft() == address(nft));
+        assertEq(recipient, address(this));
+        assertEq(royalty, 0.05 ether);
+        assertEq(IAlignmentVaultMinimal(manualInit.alignmentVault()).alignedNft(), address(nft));
         require(manualInit.owner() == address(this));
         require(keccak256(abi.encodePacked(manualInit.name())) == keccak256(abi.encodePacked("ERC721M Test")));
         require(keccak256(abi.encodePacked(manualInit.symbol())) == keccak256(abi.encodePacked("ERC721M")));
@@ -84,16 +66,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         manualInit = new ERC721M();
         vm.expectRevert(ERC721M.NotAligned.selector);
         manualInit.initialize(
-            "ERC721M Test",
-            "ERC721M",
-            100,
-            500,
-            250,
-            address(this),
-            address(nft),
-            0.01 ether,
-            21,
-            bytes32("")
+            "ERC721M Test", "ERC721M", 100, 500, 250, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );
     }
 
@@ -101,29 +74,11 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         manualInit = new ERC721M();
         vm.expectRevert(ERC721Core.Invalid.selector);
         manualInit.initialize(
-            "ERC721M Test",
-            "ERC721M",
-            100,
-            500,
-            10001,
-            address(this),
-            address(nft),
-            0.01 ether,
-            21,
-            bytes32("")
+            "ERC721M Test", "ERC721M", 100, 500, 10_001, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );
         vm.expectRevert(ERC721Core.Invalid.selector);
         manualInit.initialize(
-            "ERC721M Test",
-            "ERC721M",
-            100,
-            10001,
-            2000,
-            address(this),
-            address(nft),
-            0.01 ether,
-            21,
-            bytes32("")
+            "ERC721M Test", "ERC721M", 100, 10_001, 2000, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );
     }
 
@@ -136,7 +91,9 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testBaseUri() public view {
-        require(keccak256(abi.encodePacked(template.baseURI())) == keccak256(abi.encodePacked("https://miya.wtf/api/")));
+        require(
+            keccak256(abi.encodePacked(template.baseURI())) == keccak256(abi.encodePacked("https://miya.wtf/api/"))
+        );
     }
 
     function testContractURI() public view {
@@ -147,7 +104,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testTokenURI() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         require(
             keccak256(abi.encodePacked(template.tokenURI(1)))
@@ -171,7 +128,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
 
     function testOpenMint() public {
         require(template.mintOpen() == false);
-        template.openMint();
+        template.setMintOpen(true);
         require(template.mintOpen() == true);
     }
 
@@ -201,12 +158,12 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         vm.assume(_amount != 0);
         vm.assume(_amount <= 100);
         vm.assume(_to != address(0));
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether * _amount}(_to, _amount, 2000);
     }
 
     function testMintRevertInsufficientPayment() public {
-        template.openMint();
+        template.setMintOpen(true);
         vm.expectRevert(ERC721Core.InsufficientPayment.selector);
         template.mint{value: 0.001 ether}(address(this), 1, 2000);
     }
@@ -217,14 +174,14 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testMintRevertMintCapReached() public {
-        template.openMint();
-        template.mint{value: 0.01 ether * 100}(address(this), 100, 2000);
+        template.setMintOpen(true);
+        template.mint{value: 0.01 ether * 100}(address(this), 100,address(0), 2000);
         vm.expectRevert(ERC721Core.MintCap.selector);
-        template.mint{value: 0.01 ether}(address(this), 1, 2000);
+        template.mint{value: 0.01 ether}(address(this), 1,address(0), 2000);
     }
 
     function testMintRevertMintCapExceeded() public {
-        template.openMint();
+        template.setMintOpen(true);
         vm.expectRevert(ERC721Core.MintCap.selector);
         template.mint{value: 0.01 ether * 101}(address(this), 101, 2000);
     }
@@ -251,7 +208,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testWithdrawFunds() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(42), 1, 2000);
         uint256 dust = address(42).balance;
         template.withdrawFunds(address(42), 0.002 ether);
@@ -259,7 +216,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testWithdrawFundsRenounced() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(42), 1, 2000);
         template.renounceOwnership();
         template.withdrawFunds(address(69), 0.0000001 ether);
@@ -267,7 +224,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testWithdrawFundsRevertUnauthorized() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(42), 1, 2000);
         vm.prank(address(42));
         vm.expectRevert(Ownable.Unauthorized.selector);
@@ -294,13 +251,13 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testProcessPayment() public {
-        template.openMint();
+        template.setMintOpen(true);
         address(template).call{value: 1 ether}("");
         require(template.balanceOf(address(this)) > 0);
     }
 
     function testTransferFromUnlocked() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.transferFrom(address(this), address(42), 1);
         require(template.ownerOf(1) == address(42));
@@ -313,7 +270,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         vm.expectRevert(abi.encodeWithSelector(IERC721x.Locked.selector, 1));
@@ -321,7 +278,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testSafeTransferFromUnlocked() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.safeTransferFrom(address(this), address(42), 1, bytes("milady"));
         require(template.ownerOf(1) == address(42));
@@ -334,7 +291,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         vm.expectRevert(abi.encodeWithSelector(IERC721x.Locked.selector, 1));
@@ -348,7 +305,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         require(!template.isUnlocked(1));
@@ -366,7 +323,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         vm.expectRevert(IERC721x.NotApprovedContract.selector);
         template.lockId(1);
@@ -379,7 +336,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         vm.expectRevert(IERC721x.AlreadyLocked.selector);
@@ -393,7 +350,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         template.unlockId(1);
@@ -409,7 +366,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[1] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
 
@@ -432,7 +389,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         vm.expectRevert(IERC721x.NotApprovedContract.selector);
         template.unlockId(1);
@@ -445,7 +402,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         vm.expectRevert(IERC721x.NotLocked.selector);
         template.unlockId(1);
@@ -458,7 +415,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         status[0] = false;
@@ -476,7 +433,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[1] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
 
@@ -505,7 +462,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
         status[0] = true;
         template.updateApprovedContracts(approved, status);
 
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         template.lockId(1);
         vm.expectRevert(IERC721x.ApprovedContract.selector);
@@ -513,7 +470,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testFreeIdRevertNotLocked() public {
-        template.openMint();
+        template.setMintOpen(true);
         template.mint{value: 0.01 ether}(address(this), 1, 2000);
         vm.expectRevert(IERC721x.NotLocked.selector);
         template.freeId(1, address(this));
