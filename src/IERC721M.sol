@@ -53,26 +53,33 @@ interface IERC721M is IERC721, IERC721x, IERC2981 {
     }
 
     function name() external view returns (string memory); //
-    function symbol() external view returns (string memory); //
+    function symbol() external view returns (string memory);
+    //
     function baseURI() external view returns (string memory); //
-    function contractURI() external view returns (string memory); //
+    function contractURI() external view returns (string memory);
+    //
     function tokenURI(uint256 tokenId) external view returns (string memory); //
-    function maxSupply() external view returns (uint40); //
+    function maxSupply() external view returns (uint40);
+    //
     function totalSupply() external view returns (uint256); //
-    function price() external view returns (uint256); //
-
+    function price() external view returns (uint256);
+    //
     function vaultFactory() external view returns (address); //
-    function uriLocked() external view returns (bool); //
+    function uriLocked() external view returns (bool);
+    //
     function mintOpen() external view returns (bool); //
-    function alignmentVault() external view returns (address); //
+    function alignmentVault() external view returns (address);
+    //
     function minAllocation() external view returns (uint16); //
-    function maxAllocation() external view returns (uint16); //
+    function maxAllocation() external view returns (uint16);
+    //
     function referralFee() external view returns (uint16); //
-    function getBlacklist() external view returns (address[] memory); //
+    function getBlacklist() external view returns (address[] memory);
+    //
     function getCustomMintListIds() external view returns (uint256[] memory); //
-    function customMintData(uint8 listId) external view returns (CustomMint memory); //
+    function customMintData(uint8 listId) external view returns (CustomMint memory);
+    //
     function customClaims(address user, uint8 listId) external view returns (uint256 claimed); //
-
     function setReferralFee(uint16 newReferralFee) external;
     function setBaseURI(string memory newBaseURI) external;
     function setPrice(uint256 newPrice) external;

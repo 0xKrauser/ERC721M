@@ -369,17 +369,20 @@ contract BetaERC721MTest is Test, ERC721Holder {
     }
 
     function testCustomMint() public {
-        template.setMintList(0, ERC721Core.MintList({
-            root: 0x2733c38db000155462a813b4e01c2805062f66585041f82047d37e520804e232,
-            userSupply: 5,
-            maxSupply: 10,
-            unit: 1,
-            start: 0,
-            end: 0,
-            price: 0,
-            reserved: false,
-            paused: false
-        }));
+        template.setMintList(
+            0,
+            ERC721Core.MintList({
+                root: 0x2733c38db000155462a813b4e01c2805062f66585041f82047d37e520804e232,
+                userSupply: 5,
+                maxSupply: 10,
+                unit: 1,
+                start: 0,
+                end: 0,
+                price: 0,
+                reserved: false,
+                paused: false
+            })
+        );
         // template.setMintOpen(true);
         bytes32[] memory proof = new bytes32[](3);
         proof[0] = 0x3bd5223715c2aeb242433e85b4d9ce89738d6938a23826eca19bb6828d8a1bb9;

@@ -6,7 +6,7 @@ import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
 import {ERC721Core} from "../src/ERC721Core.sol";
-import {IAlignmentVaultMinimal,ERC721M} from "../src/ERC721M.sol";
+import {IAlignmentVaultMinimal, ERC721M} from "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/solady/src/auth/Ownable.sol";
 
@@ -91,9 +91,7 @@ contract AlphaERC721MTest is Test, ERC721Holder {
     }
 
     function testBaseUri() public view {
-        require(
-            keccak256(abi.encodePacked(template.baseURI())) == keccak256(abi.encodePacked("https://miya.wtf/api/"))
-        );
+        require(keccak256(abi.encodePacked(template.baseURI())) == keccak256(abi.encodePacked("https://miya.wtf/api/")));
     }
 
     function testContractURI() public view {
@@ -175,9 +173,9 @@ contract AlphaERC721MTest is Test, ERC721Holder {
 
     function testMintRevertMintCapReached() public {
         template.setMintOpen(true);
-        template.mint{value: 0.01 ether * 100}(address(this), 100,address(0), 2000);
+        template.mint{value: 0.01 ether * 100}(address(this), 100, address(0), 2000);
         vm.expectRevert(ERC721Core.MintCap.selector);
-        template.mint{value: 0.01 ether}(address(this), 1,address(0), 2000);
+        template.mint{value: 0.01 ether}(address(this), 1, address(0), 2000);
     }
 
     function testMintRevertMintCapExceeded() public {

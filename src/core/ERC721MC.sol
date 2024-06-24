@@ -3,11 +3,15 @@ pragma solidity ^0.8.23;
 
 // >>>>>>>>>>>> [ IMPORTS ] <<<<<<<<<<<<
 
-import {ERC721Core} from "./ERC721Core.sol";
-import {FixedPointMathLib as FPML} from "../lib/solady/src/utils/FixedPointMathLib.sol";
+import { ERC721Core } from "./ERC721Core.sol";
 
-import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
-import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
+import { NotZero, TransferFailed } from "./ICore.sol";
+import { IERC721M } from "./IERC721M.sol";
+
+import { FixedPointMathLib as FPML } from "../../lib/solady/src/utils/FixedPointMathLib.sol";
+
+import { IERC20 } from "../../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
+
 // import {console2} from "../lib/forge-std/src/Console2.sol";
 
 // >>>>>>>>>>>> [ INTERFACES ] <<<<<<<<<<<<
@@ -33,19 +37,14 @@ interface IFactory {
  * @notice A NFT template that can be configured to automatically send a portion of mint funds to an AlignmentVault
  * @custom:github https://github.com/Zodomo/ERC721M
  */
-contract ERC721M is ERC721Core {
-    // >>>>>>>>>>>> [ ERRORS ] <<<<<<<<<<<<
-
-    error NotAligned();
-
-    // >>>>>>>>>>>> [ EVENTS ] <<<<<<<<<<<<
-
-    event AlignmentUpdate(uint16 indexed minAllocation, uint16 indexed maxAllocation);
-
+contract ERC721M is ERC721Core, IERC721M {
     // >>>>>>>>>>>> [ STORAGE ] <<<<<<<<<<<<
 
     // Address of AlignmentVaultFactory, used when deploying AlignmentVault
     address public constant VAULT_FACTORY = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
+
+    uint16 private constant MIN_ALLOCATION = 500;
+
     uint16 public minAllocation;
     uint16 public maxAllocation;
 
@@ -60,19 +59,18 @@ contract ERC721M is ERC721Core {
     function initialize(
         string memory name_, // Collection name ("Milady")
         string memory symbol_, // Collection symbol ("MIL")
-        uint64 _maxSupply, // Max supply (~1.099T max)
+        uint32 _maxSupply, // Max supply (~1.099T max)
         uint16 _royalty, // Percentage in basis points (420 == 4.20%)
         uint16 _allocation, // Minimum Percentage of mint funds sent to AlignmentVault in bps, min. of 5% (777 == 7.77%)
         address _owner, // Collection contract owner
         address _alignedNft, // Address of NFT to configure AlignmentVault for, must have NFTX vault!
-        uint80 _price, // Price (~1.2M ETH max)
+        uint256 _price, // Price (~1.2M ETH max)
         uint96 _vaultId, // NFTX Vault ID, please check!
         bytes32 _salt // AV Deployment salt
     ) external payable virtual initializer {
         // Confirm mint alignment allocation is within valid range
         //@TODO opinionated magic number, maybe move this to the factory
-        if (_allocation < 500) revert NotAligned(); // Require allocation be >= 5%
-        if (_allocation > _DENOMINATOR_BPS) revert Invalid(); // Require allocation and royalty be <= 100%
+        if (_allocation < MIN_ALLOCATION || _allocation > _DENOMINATOR_BPS) revert AllocationOutOfBounds();
         minAllocation = _allocation;
         maxAllocation = _allocation;
 
@@ -86,7 +84,7 @@ contract ERC721M is ERC721Core {
         alignmentVault = deployedAV;
         // Send initialize payment (if any) to vault
         if (msg.value > 0) {
-            (bool success,) = payable(deployedAV).call{value: msg.value}("");
+            (bool success, ) = payable(deployedAV).call{ value: msg.value }("");
             if (!success) revert TransferFailed();
         }
         emit AlignmentUpdate(_allocation, _allocation);
@@ -96,36 +94,36 @@ contract ERC721M is ERC721Core {
 
     // >>>>>>>>>>>> [ MINT LOGIC ] <<<<<<<<<<<<
 
-    function _mint(uint256 amount, address recipient) internal override {
-        _mint(recipient, amount, minAllocation);
-    }
+    function _handleAllocation(uint256 allocation_) internal virtual {
+        if (allocation_ < minAllocation || allocation_ > maxAllocation) revert AllocationOutOfBounds();
 
-    // Solady ERC721 _mint override to implement mint funds alignment and blacklist
-    function _mint(address recipient, uint256 amount, uint16 allocation) internal {
-        // Ensure minter and recipient don't hold blacklisted assets
-
-        //@TODO maybe we can do this before everything else and then call core's _mint
-
-        // Ensure allocation set by the user is in the range between minAllocation and maxAllocation
-
-        if (allocation < minAllocation || allocation > maxAllocation) revert Invalid();
-        // Calculate allocation
-        uint256 mintAlloc = FPML.fullMulDivUp(allocation, msg.value, _DENOMINATOR_BPS);
+        uint256 mintAlloc = FPML.fullMulDivUp(allocation_, msg.value, _DENOMINATOR_BPS);
 
         if (msg.value > 0) {
-            // Send aligned amount to AlignmentVault (success is intentionally not read to save gas as it cannot fail)
-            payable(alignmentVault).call{value: mintAlloc}("");
+            payable(alignmentVault).call{ value: mintAlloc }("");
         }
+    }
 
-        // Process ERC721 mints
-        // totalSupply is read once externally from loop to reduce SLOADs to save gas
-        super._mint(amount, recipient);
+    function _handleMint(address recipient_, uint256 amount_, address referral_) internal virtual override {
+        _handleAllocation(minAllocation);
+        ERC721Core._handleMint(recipient_, amount_, referral_);
+    }
+
+    function _handleMintWithList(
+        bytes32[] calldata proof_,
+        uint8 listId_,
+        address recipient_,
+        uint32 amount_,
+        address referral_
+    ) internal virtual override {
+        _handleAllocation(minAllocation);
+        ERC721Core._handleMintWithList(proof_, listId_, recipient_, amount_, referral_);
     }
 
     // Standard mint function that supports batch minting and custom allocation
-    function mint(address recipient, uint256 amount, uint16 allocation) public payable virtual mintable(amount) {
-        if (msg.value < (price * amount)) revert InsufficientPayment();
-        _mint(recipient, amount, allocation);
+    function mint(address recipient_, uint256 amount_, uint16 allocation_) public payable virtual {
+        _handleAllocation(allocation_);
+        ERC721Core._handleMint(recipient_, amount_, address(0));
     }
 
     // Standard batch mint with custom allocation support and referral fee support
@@ -134,102 +132,89 @@ contract ERC721M is ERC721Core {
         uint256 amount_,
         address referral_,
         uint16 allocation_
-    ) public payable virtual mintable(amount_) nonReentrant {
-        if (referral_ == msg.sender || referral_ == recipient_) revert SelfReferralNotAllowed();
-        if (msg.value < (price * amount_)) revert InsufficientPayment();
-        _handleReferral(referral_);
-        _mint(recipient_, amount_, allocation_);
+    ) public payable virtual nonReentrant {
+        _handleAllocation(allocation_);
+        ERC721Core._handleMint(recipient_, amount_, referral_);
     }
+
+    // Standard batch mint with custom allocation support, list support and referral fee support
+    // Remove for contract size?
+    /*     
+    function mint(
+        bytes32[] calldata proof_,
+        uint8 listId_,
+        address recipient_,
+        uint64 amount_,
+        uint16 allocation_,
+        address referral_
+    ) public payable virtual nonReentrant {
+        _handleAllocation(allocation_);
+        ERC721Core._handleMintWithList(proof_, listId_, recipient_, amount_, referral_);
+    } 
+    */
 
     // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
 
-    function setReferralFee(uint16 newReferralFee) external virtual override onlyOwner {
-        if (newReferralFee > (_DENOMINATOR_BPS - maxAllocation)) revert Invalid();
-        referralFee = newReferralFee;
-        emit ReferralFeeUpdate(newReferralFee);
+    /**
+     * @inheritdoc ERC721Core
+     * @notice Override to account for allocation when setting a percentage going to the referral
+     */
+    function setReferralFee(uint16 bps_) external virtual override onlyOwner {
+        if (bps_ > (_DENOMINATOR_BPS - maxAllocation)) revert MaxPercentage();
+        _setReferralFee(bps_);
     }
 
-    // Increase mint alignment allocation
-    // NOTE: There will be no function to decrease this value. This operation is one-way only.
-    function increaseAlignment(uint16 newMinAllocation, uint16 newMaxAllocation) external virtual onlyOwner {
-        uint16 _minAllocation = minAllocation;
-        if (newMaxAllocation < _minAllocation) revert Invalid();
-        // Prevent oversetting alignment (keeping maxAllocation in mind)
-        if (newMaxAllocation + referralFee > _DENOMINATOR_BPS) revert Invalid();
-        // Prevent alignment deception (changing it last mint) by locking minAllocation in at 50% minted
-        if (totalSupply() < maxSupply / 2) {
-            if (newMinAllocation < _minAllocation || newMinAllocation > newMaxAllocation) revert Invalid();
-            minAllocation = newMinAllocation;
-        } else {
-            newMinAllocation = _minAllocation;
+    function setAllocation(uint16 min_, uint16 max_) external virtual onlyOwner {
+        if (max_ < minAllocation || max_ + referralFee > _DENOMINATOR_BPS) revert AllocationOutOfBounds();
+
+        if (min_ < minAllocation) {
+            if (_totalSupply > maxSupply / 2) revert AllocationOutOfBounds();
+            minAllocation = min_;
         }
-        maxAllocation = newMaxAllocation;
-        emit AlignmentUpdate(newMinAllocation, newMaxAllocation);
+
+        maxAllocation = max_;
+        emit AlignmentUpdate(minAllocation, max_);
     }
 
     // Withdraw non-allocated mint funds
-    function withdrawFunds(address recipient, uint256 amount) external virtual override nonReentrant {
-        // Cache owner address to save gas
-        address owner = owner();
-        uint256 balance = address(this).balance;
-        if (recipient == address(0)) revert Invalid();
-        // If contract is owned and caller isn't them, revert.
-        if (owner != address(0) && owner != msg.sender) revert Unauthorized();
-        // If contract is renounced, convert recipient to vault and withdraw all funds to it
-        if (owner == address(0)) {
-            recipient = alignmentVault;
-            amount = balance;
-        }
-        // Instead of reverting for overage, simply overwrite amount with balance
-        if (amount > balance) amount = balance;
-
-        // Process withdrawal
-        (bool success,) = payable(recipient).call{value: amount}("");
-        if (!success) revert TransferFailed();
-        emit Withdraw(recipient, amount);
+    function withdraw(address recipient, uint256 amount) public virtual override nonReentrant {
+        super.withdraw(owner() == address(0) ? alignmentVault : recipient, amount);
     }
 
     // >>>>>>>>>>>> [ ASSET HANDLING ] <<<<<<<<<<<<
 
     // Internal handling for receive() and fallback() to reduce code length
     function _processPayment() internal override {
-        if (mintOpen) {
+        if (!paused()) {
             mint(msg.sender, (msg.value / price));
         } else {
             // Calculate allocation and split paymeent accordingly
             uint256 mintAlloc = FPML.fullMulDivUp(minAllocation, msg.value, _DENOMINATOR_BPS);
             // Success when transferring to vault isn't checked because transfers to vault cant fail
-            payable(alignmentVault).call{value: mintAlloc}("");
+            payable(alignmentVault).call{ value: mintAlloc }("");
             // Reentrancy risk is ignored here because if owner wants to withdraw that way that's their prerogative
             // But if transfer to owner fails for any reason, it will be sent to the vault
-            (bool success,) = payable(owner()).call{value: msg.value - mintAlloc}("");
-            if (!success) payable(alignmentVault).call{value: msg.value - mintAlloc}("");
+            (bool success, ) = payable(owner()).call{ value: msg.value - mintAlloc }("");
+            if (!success) payable(alignmentVault).call{ value: msg.value - mintAlloc }("");
         }
     }
 
     // Rescue non-aligned tokens from contract, else send aligned tokens to vault
-    function rescueERC20(address addr, address recipient) external virtual override onlyOwner {
-        uint256 balance = IERC20(addr).balanceOf(address(this));
-        if (addr == IAlignmentVaultMinimal(alignmentVault).vault()) {
-            IERC20(addr).transfer(alignmentVault, balance);
-        } else {
-            IERC20(addr).transfer(recipient, balance);
-        }
+    function rescueERC20(address token_, address recipient_) public virtual override onlyOwner {
+        if (token_ == IAlignmentVaultMinimal(alignmentVault).vault()) recipient_ = alignmentVault;
+        _sendERC20(token_, recipient_, IERC20(token_).balanceOf(address(this)));
     }
 
     // Rescue non-aligned NFTs from contract, else send aligned NFTs to vault
-    function rescueERC721(address addr, address recipient, uint256 tokenId) external virtual override onlyOwner {
-        if (addr == IAlignmentVaultMinimal(alignmentVault).alignedNft()) {
-            IERC721(addr).safeTransferFrom(address(this), alignmentVault, tokenId);
-        } else {
-            IERC721(addr).transferFrom(address(this), recipient, tokenId);
-        }
+    function rescueERC721(address token_, address recipient_, uint256 tokenId_) public virtual override onlyOwner {
+        if (token_ == IAlignmentVaultMinimal(alignmentVault).alignedNft()) recipient_ = alignmentVault;
+        _sendERC721(token_, recipient_, tokenId_);
     }
 
     // Forward aligned NFTs to vault, revert if sent other NFTs
     function onERC721Received(address, address, uint256 tokenId, bytes calldata) external virtual returns (bytes4) {
         address nft = IAlignmentVaultMinimal(alignmentVault).alignedNft();
-        if (msg.sender == nft) IERC721(nft).safeTransferFrom(address(this), alignmentVault, tokenId);
+        if (msg.sender == nft) _sendERC721(nft, alignmentVault, tokenId);
         else revert NotAligned();
         return ERC721M.onERC721Received.selector;
     }

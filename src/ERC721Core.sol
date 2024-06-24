@@ -3,19 +3,19 @@ pragma solidity ^0.8.23;
 
 // >>>>>>>>>>>> [ IMPORTS ] <<<<<<<<<<<<
 
-import {ERC721x} from "../lib/ERC721x/src/erc721/ERC721x.sol";
-import {ERC2981} from "../lib/solady/src/tokens/ERC2981.sol";
-import {Initializable} from "../lib/solady/src/utils/Initializable.sol";
-import {ReentrancyGuard} from "../lib/solady/src/utils/ReentrancyGuard.sol";
+import { ERC721x } from "../lib/ERC721x/src/erc721/ERC721x.sol";
+import { ERC2981 } from "../lib/solady/src/tokens/ERC2981.sol";
+import { Initializable } from "../lib/solady/src/utils/Initializable.sol";
+import { ReentrancyGuard } from "../lib/solady/src/utils/ReentrancyGuard.sol";
 
-import {EnumerableSetLib} from "../lib/solady/src/utils/EnumerableSetLib.sol";
-import {LibString} from "../lib/solady/src/utils/LibString.sol";
-import {FixedPointMathLib as FPML} from "../lib/solady/src/utils/FixedPointMathLib.sol";
-import {MerkleProofLib} from "../lib/solady/src/utils/MerkleProofLib.sol";
+import { EnumerableSetLib } from "../lib/solady/src/utils/EnumerableSetLib.sol";
+import { LibString } from "../lib/solady/src/utils/LibString.sol";
+import { FixedPointMathLib as FPML } from "../lib/solady/src/utils/FixedPointMathLib.sol";
+import { MerkleProofLib } from "../lib/solady/src/utils/MerkleProofLib.sol";
 
-import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
-import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
-// import {console2} from "../lib/forge-std/src/Console2.sol";
+import { IERC20 } from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
+import { IERC721 } from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
+//import {console2} from "../lib/forge-std/src/Console2.sol";
 
 interface IAsset {
     function balanceOf(address holder) external returns (uint256);
@@ -24,7 +24,7 @@ interface IAsset {
 /**
  * @title ERC721Core
  * @author Zodomo.eth (Farcaster/Telegram/Discord/Github: @zodomo, X: @0xZodomo, Email: zodomo@proton.me)
- * @author 0xKrauser (Discord/Github/X: @0xKrauser, Email: detroitmetalcrypto@gmail.com) 
+ * @author 0xKrauser (Discord/Github/X: @0xKrauser, Email: detroitmetalcrypto@gmail.com)
  * @notice NFT template that contains launchpad friendly features to be inherited by other contracts
  * @custom:github https://github.com/Zodomo/ERC721M
  */
@@ -88,7 +88,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     error InsufficientPayment();
 
     // >>>>>>>>>>>> [ EVENTS ] <<<<<<<<<<<<
-    
+
     //@TODO consider removing indexed from some parameters, save on gas
     // as long as the contract is verified or we have access to the ABI the events will be indexed properly by default
 
@@ -111,7 +111,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /**
      * @dev Emitted when a batch of tokens have their permanent URI set.
      * This event is emitted when a range of token IDs have their permanent URI set.
-     * 
+     *
      * @param _fromTokenId The starting token ID of the range.
      * @param _toTokenId The ending token ID of the range.
      * @custom:unique
@@ -121,7 +121,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     /**
      * @dev Emitted when the minting process is open.
      * @param _status The status, true means mint is open.
-     */ 
+     */
     event MintOpen(bool indexed _status);
 
     /**
@@ -190,7 +190,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param _uri The new contract metadata URI.
      */
     event ContractMetadataUpdate(string indexed _uri);
-    
+
     /**
      * @dev Emitted when the royalty fee for a specific token is updated.
      * @param tokenId The ID of the token for which the royalty fee is updated.
@@ -233,7 +233,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      */
     event MintListStatus(uint8 indexed _listId, bool indexed _paused);
 
-        /**
+    /**
      * @dev Emitted when a custom mint list is deleted.
      * @param _listId The ID of the custom mint list.
      * @custom:unique
@@ -255,15 +255,14 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     //@TODO review this
     /**
      * @dev Represents a custom mint configuration.
-     * 
+     *
      * This struct contains the following fields:
      * @param root The root hash of the merkle tree.
-     * @param issued The number of tokens already issued. 
+     * @param issued The number of tokens already issued.
      * @param claimed The number of tokens that can be claimed by a single address.
      * @param supply The total supply of tokens.
      * @param price The price of each token.
      */
-
     struct MintList {
         bytes32 root;
         uint64 userSupply;
@@ -274,15 +273,15 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         uint128 price;
         bool reserved;
         bool paused;
-        // address tokenAddress;
     }
+    // address tokenAddress;
 
     //@TODO opinionated? might consider to move it in factory
     /// @dev Maximum royalty fee in basis points.
     uint16 internal constant _MAX_ROYALTY_BPS = 1000;
 
     /// @dev Denominator for basis points. Equivalent to 100% with 2 decimal places.
-    uint16 internal constant _DENOMINATOR_BPS = 10000;
+    uint16 internal constant _DENOMINATOR_BPS = 10_000;
 
     /// @dev Interface ID for ERC4906. Used in supportsInterface.
     bytes4 private constant ERC4906_INTERFACE_ID = bytes4(0x49064906);
@@ -362,13 +361,13 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     uint64 public unit;
 
     uint64 public perUserSupply;
-    
+
     /// @dev Mapping of token IDs to their respective tokenURIs, optional override.
     mapping(uint256 tokenId => string uri) private _tokenURIs;
 
     /// @dev Mapping of token IDs to their respective permanentURI state.
     mapping(uint256 tokenId => bool isPermanent) private _permanentTokenURIs;
-    
+
     /// @dev Mapping of listId to MintList data.
     mapping(uint8 listId => MintList list) public mintLists;
 
@@ -390,10 +389,10 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
         if (_totalSupply + mulAmount > maxSupply) revert MintCap();
         if (claimedList[msg.sender][0] + mulAmount > perUserSupply) revert ExcessiveClaim();
-        if(mulAmount > maxSupply - _totalSupply - _reservedSupply) revert BreaksReservedSupply();
+        if (mulAmount > maxSupply - _totalSupply - _reservedSupply) revert BreaksReservedSupply();
 
-        if(start != 0 && block.timestamp < start) revert MintClosed();
-        if(end != 0 && block.timestamp > end) revert MintClosed();
+        if (start != 0 && block.timestamp < start) revert MintClosed();
+        if (end != 0 && block.timestamp > end) revert MintClosed();
         _;
     }
 
@@ -402,7 +401,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param listId_ The ID of the custom mint list.
      * @param amount_ The amount to be minted.
      */
-    modifier listMintable(uint8 listId_, uint256 amount_) {        
+    modifier listMintable(uint8 listId_, uint256 amount_) {
         MintList memory list = mintLists[listId_];
         if (list.paused) revert ListPaused();
         uint256 mulAmount = amount_ * list.unit;
@@ -410,11 +409,11 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
         if (_totalSupply + mulAmount > maxSupply) revert MintCap();
         if (listSupply[listId_] + mulAmount > list.maxSupply) revert MintCap();
-        
-        if(!list.reserved && mulAmount > maxSupply - _totalSupply - _reservedSupply) revert BreaksReservedSupply();
 
-        if(list.start != 0 && block.timestamp < list.start) revert MintClosed();
-        if(list.end != 0 && block.timestamp > list.end) revert MintClosed();
+        if (!list.reserved && mulAmount > maxSupply - _totalSupply - _reservedSupply) revert BreaksReservedSupply();
+
+        if (list.start != 0 && block.timestamp < list.start) revert MintClosed();
+        if (list.end != 0 && block.timestamp > list.end) revert MintClosed();
         _;
     }
 
@@ -450,7 +449,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param name_ The name of the collection. e.g. "Milady Maker"
      * @param symbol_ The symbol of the collection. e.g. "MILADY"
      * @param maxSupply_ The maximum supply of tokens that can be minted. (~1.099T max)
-     * @param royalty_ The percentage of the mint value that is paid to the referrer. 
+     * @param royalty_ The percentage of the mint value that is paid to the referrer.
      * e.g. (420 == 420 / 10000 == 4.20%) Max 10.00%
      * @param owner_ The owner of the collection contract.
      * @param price_ The price of minting a single token. (~1.2M ETH max)
@@ -463,7 +462,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         address owner_, // Collection contract owner
         uint80 price_ // Price (~1.2M ETH max)
     ) internal virtual onlyInitializing {
-        if(royalty_ > _MAX_ROYALTY_BPS) revert Invalid();
+        if (royalty_ > _MAX_ROYALTY_BPS) revert Invalid();
         _setTokenRoyalty(0, owner_, royalty_);
         _setDefaultRoyalty(owner_, royalty_);
         // Initialize ownership
@@ -473,7 +472,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         _symbol = symbol_;
         maxSupply = maxSupply_;
         price = price_;
-        
+
         unit = 1;
         start = 0;
         end = 0;
@@ -487,15 +486,15 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     // >>>>>>>>>>>> [ VIEW / METADATA FUNCTIONS ] <<<<<<<<<<<<
 
-    /** 
+    /**
      * @notice Returns the name of the collection.
      * @return name a string representing the name of the collection.
-     */ 
+     */
     function name() public view virtual override returns (string memory) {
         return _name;
     }
 
-    /** 
+    /**
      * @notice Returns the symbol of the collection.
      * @return symbol a string representing the symbol of the collection.
      */
@@ -535,9 +534,10 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
         string memory newBaseURI = baseURI();
 
-        return bytes(newBaseURI).length > 0 ? 
-            string(abi.encodePacked(newBaseURI, tokenId.toString(), _fileExtension)) : 
-            "";
+        return
+            bytes(newBaseURI).length > 0
+                ? string(abi.encodePacked(newBaseURI, tokenId.toString(), _fileExtension))
+                : "";
     }
 
     /**
@@ -549,14 +549,15 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     /**
-     * @dev Override to add ERC4906 and royalty interface. 
+     * @dev Override to add ERC4906 and royalty interface.
      * ERC721, ERC721Metadata, and ERC721x are present in the ERC721x override
      * @param interfaceId The ID of the standard interface you want to check for.
      * @return supported bool representing whether the interface is supported.
      */
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721x, ERC2981) returns (bool) {
-        return interfaceId == ERC4906_INTERFACE_ID || 
-            ERC721x.supportsInterface(interfaceId) || 
+        return
+            interfaceId == ERC4906_INTERFACE_ID ||
+            ERC721x.supportsInterface(interfaceId) ||
             ERC2981.supportsInterface(interfaceId);
     }
 
@@ -571,7 +572,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     // >>>>>>>>>>>> [ INTERNAL FUNCTIONS ] <<<<<<<<<<<<
 
     /**
-     * @dev Blacklist function to prevent mints to and from holders of prohibited assets, 
+     * @dev Blacklist function to prevent mints to and from holders of prohibited assets,
      * applied both on minter and recipient
      * @param minter The address of the minter.
      * @param recipient The address of the recipient.
@@ -579,7 +580,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     function _enforceBlacklist(address minter, address recipient) internal virtual {
         address[] memory blacklist = _blacklist.values();
         uint256 count;
-        for (uint256 i = 1; i < blacklist.length;) {
+        for (uint256 i = 1; i < blacklist.length; ) {
             unchecked {
                 count += IAsset(blacklist[i]).balanceOf(minter);
                 count += IAsset(blacklist[i]).balanceOf(recipient);
@@ -588,7 +589,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
             }
         }
     }
-    
+
     // >>>>>>>>>>>> [ MINT LOGIC ] <<<<<<<<<<<<
 
     /**
@@ -600,11 +601,11 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      */
     function _mint(address recipient_, uint256 amount_, address referral_) internal virtual {
         //@TODO if recipient is not msg.sender consider emitting another event
-        
+
         _handleReferral(referral_);
 
         uint256 mulAmount = amount_ * unit;
-        
+
         unchecked {
             claimedList[msg.sender][0] += mulAmount;
         }
@@ -612,8 +613,8 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         // Process ERC721 mints
         _mint(mulAmount, recipient_);
     }
-    
-    function _mint(uint256 amount_, address recipient_) internal virtual { 
+
+    function _mint(uint256 amount_, address recipient_) internal virtual {
         // inverted parameter order to avoid overriding mint(address, uint256)
 
         // Prevent bad inputs
@@ -622,7 +623,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         _enforceBlacklist(msg.sender, recipient_);
 
         uint256 supply = _totalSupply;
-        for (uint256 i; i < amount_;) {
+        for (uint256 i; i < amount_; ) {
             _mint(recipient_, ++supply);
             unchecked {
                 ++i;
@@ -672,8 +673,8 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param referral_ The address of the referrer.
      */
     function mint(
-        address recipient_, 
-        uint256 amount_, 
+        address recipient_,
+        uint256 amount_,
         address referral_
     ) public payable virtual mintable(amount_) nonReentrant {
         if (referral_ == msg.sender || referral_ == recipient_) revert SelfReferralNotAllowed();
@@ -694,12 +695,12 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     function mint(
         bytes32[] calldata proof_,
         uint8 listId_,
-        address recipient_, 
-        uint64 amount_, 
+        address recipient_,
+        uint64 amount_,
         address referral_
     ) public payable virtual listMintable(listId_, amount_) nonReentrant {
         if (referral_ == msg.sender || referral_ == recipient_) revert SelfReferralNotAllowed();
-        
+
         MintList memory list = mintLists[listId_];
         if (msg.value < amount_ * list.price) revert InsufficientPayment();
 
@@ -723,17 +724,17 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     function _handleReferral(address referral_) internal virtual {
         if (msg.value > 0 && referral_ != address(0)) {
             // If referral isn't address(0) and mint isn't free, process sending referral fee
-            // Reentrancy is handled by applying ReentrancyGuard to referral mint function 
+            // Reentrancy is handled by applying ReentrancyGuard to referral mint function
             // [mint(address, uint256, address)]
             //@TODO stash and then withdraw might be better for gas?
-            //@TODO referral discounts? 
+            //@TODO referral discounts?
             uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
-            (bool success, ) = payable(referral_).call{value: referralAlloc}("");
+            (bool success, ) = payable(referral_).call{ value: referralAlloc }("");
             if (!success) revert TransferFailed();
             emit ReferralFeePaid(referral_, referralAlloc);
         }
     }
-    
+
     // >>>>>>>>>>>> [ PERMISSIONED / OWNER FUNCTIONS ] <<<<<<<<<<<<
 
     // >>>> [ ROYALTY FUNCTIONS ] <<<<
@@ -746,7 +747,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     function setRoyalties(address recipient, uint96 royaltyFee) external virtual onlyOwner {
         if (royaltyFee > _MAX_ROYALTY_BPS) revert Invalid();
         // Revert if royalties are disabled
-        (address receiver,) = royaltyInfo(0, 0);
+        (address receiver, ) = royaltyInfo(0, 0);
         if (receiver == address(0)) revert RoyaltiesDisabled();
 
         // Royalty recipient of nonexistent tokenId 0 is used as royalty status indicator, address(0) == disabled
@@ -761,14 +762,10 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param recipient The address of the recipient.
      * @param royaltyFee The royalty fee, represented as a 96-bit fixed-point number.
      */
-    function setRoyaltiesForId(
-        uint256 tokenId,
-        address recipient,
-        uint96 royaltyFee
-    ) external virtual onlyOwner {
+    function setRoyaltiesForId(uint256 tokenId, address recipient, uint96 royaltyFee) external virtual onlyOwner {
         if (royaltyFee > _MAX_ROYALTY_BPS) revert Invalid();
         // Revert if royalties are disabled
-        (address receiver,) = royaltyInfo(0, 0);
+        (address receiver, ) = royaltyInfo(0, 0);
         if (receiver == address(0)) revert RoyaltiesDisabled();
         // Revert if resetting tokenId 0 as it is utilized for royalty enablement status
         if (tokenId == 0) revert Invalid();
@@ -781,7 +778,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     /**
      * @notice Disables royalties for the contract.
-     * @dev Irreversibly disable royalties by resetting tokenId 0 royalty to (address(0), 0) 
+     * @dev Irreversibly disable royalties by resetting tokenId 0 royalty to (address(0), 0)
      * and deleting default royalty info
      */
     function disableRoyalties() external virtual onlyOwner {
@@ -802,15 +799,15 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param list_ The list configuration as a struct.
      */
     function setMintList(
-        uint8 listId_, 
+        uint8 listId_,
         MintList calldata list_
     ) external virtual onlyOwner validateMintList(listId_, list_) {
-        if(listId_ > lists) revert ListDoesNotExist();
-    
+        if (listId_ > lists) revert ListDoesNotExist();
+
         uint8 id = listId_ == 0 ? lists++ : listId_; // If listId_ is 0, increment listCount and create new list
 
-        MintList memory list = mintLists[listId_]; 
-        if(listId_ != 0 && list.userSupply == 0) revert ListDeleted();
+        MintList memory list = mintLists[listId_];
+        if (listId_ != 0 && list.userSupply == 0) revert ListDeleted();
         updateReservedSupply(listId_, list.reserved, list_.reserved, list.maxSupply, list_.maxSupply);
 
         mintLists[listId_] = list_;
@@ -818,17 +815,17 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
     }
 
     modifier validateMintList(uint8 listId_, MintList calldata list_) {
-        if(list_.maxSupply == 0 || list_.userSupply == 0 || list_.unit == 0) revert Invalid();
+        if (list_.maxSupply == 0 || list_.userSupply == 0 || list_.unit == 0) revert Invalid();
         if (list_.maxSupply < listSupply[listId_]) revert Invalid();
         if (list_.end != 0 && list_.end < list_.start) revert Invalid(); // Consider using more specific errors
         _;
     }
 
     function updateReservedSupply(
-        uint8 listId_, 
-        bool currentReserved_, 
-        bool newReserved_, 
-        uint64 currentMaxSupply_, 
+        uint8 listId_,
+        bool currentReserved_,
+        bool newReserved_,
+        uint64 currentMaxSupply_,
         uint64 newMaxSupply_
     ) internal {
         if (newReserved_) {
@@ -839,8 +836,8 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
                 _reservedSupply -= currentMaxSupply_ - newMaxSupply_;
             }
         } else if (currentReserved_) {
-                uint64 alreadyMinted = listSupply[listId_];
-                _reservedSupply -= currentMaxSupply_ - alreadyMinted;
+            uint64 alreadyMinted = listSupply[listId_];
+            _reservedSupply -= currentMaxSupply_ - alreadyMinted;
         }
     }
 
@@ -850,7 +847,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param listId_ The ID of the custom mint list.
      */
     function toggleMintList(uint8 listId_) external virtual onlyOwner {
-        if(listId_ == 0 || listId_ > lists) revert ListDoesNotExist();
+        if (listId_ == 0 || listId_ > lists) revert ListDoesNotExist();
         MintList storage listData = mintLists[listId_];
         if (listData.userSupply == 0) revert ListDeleted();
         listData.paused = !listData.paused;
@@ -862,7 +859,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @param listId_ The ID of the custom mint list.
      */
     function deleteMintList(uint8 listId_) external virtual onlyOwner {
-        if(listId_ == 0 || listId_ > lists) revert ListDoesNotExist();
+        if (listId_ == 0 || listId_ > lists) revert ListDoesNotExist();
         MintList storage listData = mintLists[listId_];
         if (listData.userSupply == 0) revert ListDeleted();
         listData.userSupply = 0;
@@ -881,7 +878,7 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
 
     function setMintRange(uint32 start_, uint32 end_) external virtual onlyOwner {
         if (start_ > end_) revert Invalid();
-        if(start == 0 && start != start_) mintOpen = true; // Open minting if it wasn't already
+        if (start == 0 && start != start_) mintOpen = true; // Open minting if it wasn't already
         start = start_;
         end = end_;
         emit MintRangeUpdate(start_, end_);
@@ -930,8 +927,9 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * If minting has already started and newMaxSupply is greater than current maxSupply, the function will revert.
      */
     function setSupply(uint64 newMaxSupply) external virtual onlyOwner {
-        if (newMaxSupply > maxSupply && _totalSupply != 0 || newMaxSupply < _totalSupply + _reservedSupply) 
+        if ((newMaxSupply > maxSupply && _totalSupply != 0) || newMaxSupply <= _totalSupply + _reservedSupply) {
             revert Invalid();
+        }
         maxSupply = newMaxSupply;
         emit SupplyUpdate(newMaxSupply);
     }
@@ -1014,14 +1012,14 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
         if (recipient == address(0)) revert Invalid();
         // If contract is owned and caller isn't them, revert.
         if (owner != address(0) && owner != msg.sender) revert Unauthorized();
-        
+
         //@TODO maybe fallback to factory owner when address(0)?
 
         // Instead of reverting for overage, simply overwrite amount with balance
         if (amount > balance) amount = balance;
 
         // Process withdrawal
-        (bool success,) = payable(recipient).call{ value: amount }("");
+        (bool success, ) = payable(recipient).call{ value: amount }("");
         if (!success) revert TransferFailed();
         emit Withdraw(recipient, amount);
     }
@@ -1032,10 +1030,11 @@ contract ERC721Core is ERC721x, ERC2981, Initializable, ReentrancyGuard {
      * @dev Internal handling of ether acquired through received().
      */
     function _processPayment() internal virtual {
-        if (mintOpen) mint(msg.sender, (msg.value / price));
-        else {
+        if (mintOpen) {
+            mint(msg.sender, (msg.value / price));
+        } else {
             //@TODO handle address(0)?
-            (bool success,) = payable(owner()).call{ value: msg.value }("");
+            (bool success, ) = payable(owner()).call{ value: msg.value }("");
             if (!success) revert Invalid();
         }
     }
