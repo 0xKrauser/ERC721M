@@ -18,3 +18,6 @@
 [submodule "lib/murky"]
 	path = lib/murky
 	url = https://github.com/dmfxyz/murky
+[submodule "lib/erc721-lockable"]
+	path = lib/erc721-lockable
+	url = https://github.com/filmakarov/erc721-lockable
