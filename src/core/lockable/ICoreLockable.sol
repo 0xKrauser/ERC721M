@@ -1,17 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.23;
+import { IERC721Lockable } from "../../../lib/erc721-lockable/contracts/IERC721Lockable.sol";
 
-/* is IERC721Lockable */ interface ICoreLockable {
-    /**
-     * @dev Emitted when `id` token is locked, and `unlocker` is stated as unlocking wallet.
-     */
-    event Lock(address indexed unlocker, uint256 indexed id);
-
-    /**
-     * @dev Emitted when `id` token is unlocked.
-     */
-    event Unlock(uint256 indexed id);
-
+interface ICoreLockable is IERC721Lockable {
     error AlreadyLocked();
 
     error NotLocker();

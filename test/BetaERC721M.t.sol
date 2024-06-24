@@ -6,8 +6,8 @@ import "../lib/openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.
 import "../lib/solady/test/utils/mocks/MockERC20.sol";
 import "../lib/solady/test/utils/mocks/MockERC721.sol";
 import "../lib/solady/src/utils/FixedPointMathLib.sol";
-import {ERC721Core} from "../src/ERC721Core.sol";
-import {ERC721M} from "../src/ERC721M.sol";
+import { ERC721Core } from "../src/core/ERC721Core.sol";
+import { ERC721M } from "../src/ERC721M.sol";
 import "../src/IERC721M.sol";
 import "../lib/solady/src/auth/Ownable.sol";
 import "../lib/AlignmentVault/src/IAlignmentVault.sol";
@@ -34,7 +34,16 @@ contract BetaERC721MTest is Test, ERC721Holder {
         template = new ERC721M();
         manualInit = new ERC721M();
         template.initialize(
-            "ERC721M Test", "ERC721M", 100, 500, 2000, address(this), address(nft), 0.01 ether, 21, bytes32("")
+            "ERC721M Test",
+            "ERC721M",
+            100,
+            500,
+            2000,
+            address(this),
+            address(nft),
+            0.01 ether,
+            21,
+            bytes32("")
         );
         template.setBaseURI("https://miya.wtf/api/", "");
         template.setContractURI("https://miya.wtf/api/contract.json");
@@ -66,18 +75,45 @@ contract BetaERC721MTest is Test, ERC721Holder {
         if (allocation < 500) {
             vm.expectRevert(IERC721M.NotAligned.selector);
             manualInit.initialize(
-                name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
+                name,
+                symbol,
+                maxSupply,
+                royalty,
+                allocation,
+                owner,
+                address(nft),
+                price,
+                _vaultId,
+                bytes32("")
             );
             return;
         } else if (allocation > 10_000 || royalty > 1000) {
             vm.expectRevert(IERC721M.Invalid.selector);
             manualInit.initialize(
-                name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
+                name,
+                symbol,
+                maxSupply,
+                royalty,
+                allocation,
+                owner,
+                address(nft),
+                price,
+                _vaultId,
+                bytes32("")
             );
             return;
         }
         manualInit.initialize(
-            name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
+            name,
+            symbol,
+            maxSupply,
+            royalty,
+            allocation,
+            owner,
+            address(nft),
+            price,
+            _vaultId,
+            bytes32("")
         );
         vm.prank(owner);
         manualInit.setBaseURI(baseURI, "");
@@ -96,11 +132,11 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
     function testSupportsInterface(bytes4 interfaceId) public view {
         if (
-            interfaceId == type(IERC2981).interfaceId // ERC2981
-                || interfaceId == 0x706e8489 // ERC721x
-                || interfaceId == 0x80ac58cd // ERC721
-                || interfaceId == 0x5b5e139f // ERC721Metadata
-                || interfaceId == 0x01ffc9a7 // ERC165
+            interfaceId == type(IERC2981).interfaceId || // ERC2981
+            interfaceId == 0x706e8489 || // ERC721x
+            interfaceId == 0x80ac58cd || // ERC721
+            interfaceId == 0x5b5e139f || // ERC721Metadata
+            interfaceId == 0x01ffc9a7 // ERC165
         ) assertEq(template.supportsInterface(interfaceId), true, "supportsInterface error");
         else assertEq(template.supportsInterface(interfaceId), false, "supportsInterface error");
     }
@@ -115,13 +151,13 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
         vm.prank(caller);
         if (amount == 0) {
-            template.mint{value: 0.01 ether}();
+            template.mint{ value: 0.01 ether }();
             assertEq(template.balanceOf(caller), 1, "balanceOf error");
             assertEq(template.totalSupply(), 1, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether, "template balance error");
             assertEq(address(template.alignmentVault()).balance, 0.002 ether, "vault balance error");
         } else {
-            template.mint{value: 0.01 ether * amount}(amount);
+            template.mint{ value: 0.01 ether * amount }(amount);
             assertEq(template.balanceOf(caller), amount, "balanceOf error");
             assertEq(template.totalSupply(), amount, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether * amount, "template balance error");
@@ -142,13 +178,13 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
         vm.prank(caller);
         if (amount == 0) {
-            template.mint{value: 0.01 ether}(recipient, 1, 2000);
+            template.mint{ value: 0.01 ether }(recipient, 1, 2000);
             assertEq(template.balanceOf(recipient), 1, "balanceOf error");
             assertEq(template.totalSupply(), 1, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether, "template balance error");
             assertEq(address(template.alignmentVault()).balance, 0.002 ether, "vault balance error");
         } else {
-            template.mint{value: 0.01 ether * amount}(recipient, amount, 2000);
+            template.mint{ value: 0.01 ether * amount }(recipient, amount, 2000);
             assertEq(template.balanceOf(recipient), amount, "balanceOf error");
             assertEq(template.totalSupply(), amount, "totalSupply error");
             assertEq(address(template).balance, 0.008 ether * amount, "template balance error");
@@ -179,7 +215,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
         uint256 refFee = FixedPointMathLib.mulDivUp(referralFee * amount, 0.01 ether, 10_000);
         vm.prank(caller);
-        template.mint{value: 0.01 ether * amount}(recipient, amount, referrer, 2000);
+        template.mint{ value: 0.01 ether * amount }(recipient, amount, referrer, 2000);
         assertEq(template.balanceOf(recipient), amount, "balanceOf error");
         assertEq(template.totalSupply(), amount, "totalSupply error");
         assertEq(address(referrer).balance, refFee, "referrer balance error");
@@ -308,7 +344,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
         invalidSupply = uint40(bound(invalidSupply, newSupply + 1, type(uint40).max));
 
         template.setMintOpen(true);
-        template.mint{value: 0.01 ether * amount}(amount);
+        template.mint{ value: 0.01 ether * amount }(amount);
         template.setSupply(newSupply);
         assertEq(template.maxSupply(), newSupply, "newSupply error");
 
@@ -318,7 +354,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
     function testUpdateApprovedContracts(address[] memory contracts) public {
         bool[] memory status = new bool[](contracts.length);
-        for (uint256 i; i < contracts.length;) {
+        for (uint256 i; i < contracts.length; ) {
             status[i] = true;
             unchecked {
                 ++i;
@@ -326,7 +362,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
         }
 
         template.updateApprovedContracts(contracts, status);
-        for (uint256 i; i < contracts.length;) {
+        for (uint256 i; i < contracts.length; ) {
             assertEq(template.approvedContract(contracts[i]), true, "approvedContract error");
             unchecked {
                 ++i;
@@ -346,7 +382,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
         template.setMintOpen(true);
 
         vm.prank(caller);
-        template.mint{value: 0.01 ether * amount}(recipient, amount, 2000);
+        template.mint{ value: 0.01 ether * amount }(recipient, amount, 2000);
 
         vm.expectRevert(IERC721M.Invalid.selector);
         template.withdrawFunds(address(0), type(uint256).max);
@@ -363,7 +399,7 @@ contract BetaERC721MTest is Test, ERC721Holder {
 
     function testFallback() public {
         address av = template.alignmentVault();
-        payable(av).call{value: 1 ether}("");
+        payable(av).call{ value: 1 ether }("");
         Ownable(av).transferOwnership(address(template));
         IAlignmentVault(address(template)).wrapEth(1 ether);
     }
