@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.23;
 
-import {ICoreReferral} from "./ICoreReferral.sol";
-import {TransferFailed} from "../ICore.sol";
+import { ICoreReferral } from "./ICoreReferral.sol";
+import { TransferFailed } from "../ICore.sol";
 
-import {FixedPointMathLib as FPML} from "../../../lib/solady/src/utils/FixedPointMathLib.sol";
+import { FixedPointMathLib as FPML } from "../../../lib/solady/src/utils/FixedPointMathLib.sol";
 
 abstract contract CoreReferral is ICoreReferral {
     /// @dev Denominator for basis points. Equivalent to 100% with 2 decimal places.
@@ -27,7 +27,7 @@ abstract contract CoreReferral is ICoreReferral {
             //@TODO referral discounts?
             uint256 referralAlloc = FPML.mulDivUp(referralFee, msg.value, _DENOMINATOR_BPS);
 
-            (bool success,) = payable(referral_).call{value: referralAlloc}("");
+            (bool success, ) = payable(referral_).call{ value: referralAlloc }("");
             if (!success) revert TransferFailed();
 
             emit Referral(referral_, referralAlloc);
@@ -35,7 +35,7 @@ abstract contract CoreReferral is ICoreReferral {
     }
 
     function _setReferralFee(uint16 bps_) internal virtual {
-        if (bps_ > _DENOMINATOR_BPS) revert MaxPercentage();
+        if (bps_ > _DENOMINATOR_BPS) revert MaxReferral();
         referralFee = bps_;
         emit ReferralFeeUpdate(bps_);
     }

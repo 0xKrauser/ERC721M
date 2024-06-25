@@ -44,6 +44,9 @@ abstract contract CoreMetadata721 is CoreMetadata, ERC721, ICoreMetadata721 {
     }
 
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
-        return interfaceId_ == type(IERC4906).interfaceId || ERC721.supportsInterface(interfaceId_);
+        return
+            interfaceId_ == 0x5b5e139f || // ERC721Metadata
+            interfaceId_ == 0x49064906 || // IERC4906
+            ERC721.supportsInterface(interfaceId_);
     }
 }

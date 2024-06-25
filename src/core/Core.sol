@@ -42,17 +42,20 @@ abstract contract Core is ICore, Ownable, Pausable, ReentrancyGuard {
      * @param amount_ The amount to be minted.
      * @return tokenAmount_ The amount of tokens to minted.
      */
-    function _canMint(uint256 amount_) internal view virtual returns (uint256 tokenAmount_) {
+    function _canMint(uint256 amount_) internal view virtual returns (uint32 tokenAmount_) {
         _requireNotPaused();
 
         if (msg.value < (price * amount_)) revert InsufficientPayment();
 
-        tokenAmount_ = amount_ * unit;
+        uint256 tokenAmount = amount_ * unit;
 
-        if (_totalSupply + tokenAmount_ > maxSupply) revert MaxSupply();
-        if (_claimed[msg.sender] + tokenAmount_ > userSupply) revert ClaimSupply();
+        if (_totalSupply + tokenAmount > maxSupply) revert MaxSupply();
+        if (_claimed[msg.sender] + tokenAmount > userSupply) revert ClaimSupply();
 
         if ((start != 0 && block.timestamp < start) || (end != 0 && block.timestamp > end)) revert TimeOutOfBounds();
+
+        // we checked against maxSupply, so we can safely cast to uint32
+        return uint32(tokenAmount);
     }
 
     function totalSupply() external view returns (uint256) {
@@ -73,11 +76,11 @@ abstract contract Core is ICore, Ownable, Pausable, ReentrancyGuard {
 
     /**
      * @notice Sets the price for minting a single token.
-     * @param newPrice The new price.
+     * @param price_ The new price.
      */
-    function setPrice(uint72 newPrice) external virtual onlyOwner {
-        price = newPrice;
-        emit PriceUpdate(newPrice);
+    function setPrice(uint256 price_) external virtual onlyOwner {
+        price = price_;
+        emit PriceUpdate(price_);
     }
 
     function setMintPeriod(uint32 start_, uint32 end_) external onlyOwner {
@@ -119,12 +122,7 @@ abstract contract Core is ICore, Ownable, Pausable, ReentrancyGuard {
         emit SupplyUpdate(maxSupply_);
     }
 
-    /**
-     * @notice Withdraws funds from the contract.
-     * @param recipient_ The address to which the funds are withdrawn.
-     * @param amount_ The amount of funds withdrawn.
-     */
-    function withdraw(address recipient_, uint256 amount_) public virtual nonReentrant {
+    function _withdraw(address recipient_, uint256 amount_) internal virtual {
         if (recipient_ == address(0)) revert NotZero();
 
         // Cache owner address to save gas
@@ -143,6 +141,15 @@ abstract contract Core is ICore, Ownable, Pausable, ReentrancyGuard {
         if (!success) revert TransferFailed();
 
         emit Withdraw(recipient_, amount_);
+    }
+
+    /**
+     * @notice Withdraws funds from the contract.
+     * @param recipient_ The address to which the funds are withdrawn.
+     * @param amount_ The amount of funds withdrawn.
+     */
+    function withdraw(address recipient_, uint256 amount_) public virtual nonReentrant {
+        _withdraw(recipient_, amount_);
     }
 
     function _sendERC20(address token_, address recipient_, uint256 amount_) internal virtual {

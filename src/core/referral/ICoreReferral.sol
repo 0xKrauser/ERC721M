@@ -21,7 +21,7 @@ interface ICoreReferral {
     error SelfReferral();
 
     /// @dev The referral fee is above the maximum value.
-    error MaxPercentage();
+    error MaxReferral();
 
     /**
      * @notice Sets the referral fee for minting.

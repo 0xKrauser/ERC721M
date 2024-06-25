@@ -12,7 +12,7 @@ import { FixedPointMathLib as FPML } from "../lib/solady/src/utils/FixedPointMat
 
 import { IERC20 } from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 
-// import {console2} from "../lib/forge-std/src/Console2.sol";
+// import { console2 } from "../lib/forge-std/src/Console2.sol";
 
 // >>>>>>>>>>>> [ INTERFACES ] <<<<<<<<<<<<
 
@@ -160,25 +160,28 @@ contract ERC721M is ERC721Core, IERC721M {
      * @notice Override to account for allocation when setting a percentage going to the referral
      */
     function setReferralFee(uint16 bps_) external virtual override onlyOwner {
-        if (bps_ > (_DENOMINATOR_BPS - maxAllocation)) revert MaxPercentage();
+        if (bps_ > (_DENOMINATOR_BPS - maxAllocation)) revert MaxReferral();
         _setReferralFee(bps_);
     }
 
     function setAllocation(uint16 min_, uint16 max_) external virtual onlyOwner {
-        if (max_ < minAllocation || max_ + referralFee > _DENOMINATOR_BPS) revert AllocationOutOfBounds();
+        if ((max_ < min_) || (max_ + referralFee > _DENOMINATOR_BPS)) revert AllocationOutOfBounds();
 
         if (min_ < minAllocation) {
             if (_totalSupply > maxSupply / 2) revert AllocationOutOfBounds();
             minAllocation = min_;
+        } else {
+            minAllocation = min_;
         }
 
         maxAllocation = max_;
+
         emit AlignmentUpdate(minAllocation, max_);
     }
 
     // Withdraw non-allocated mint funds
     function withdraw(address recipient, uint256 amount) public virtual override nonReentrant {
-        super.withdraw(owner() == address(0) ? alignmentVault : recipient, amount);
+        _withdraw(owner() == address(0) ? alignmentVault : recipient, amount);
     }
 
     // >>>>>>>>>>>> [ ASSET HANDLING ] <<<<<<<<<<<<

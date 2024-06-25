@@ -17,8 +17,6 @@ import { Initializable } from "../../lib/solady/src/utils/Initializable.sol";
 
 import { FixedPointMathLib as FPML } from "../../lib/solady/src/utils/FixedPointMathLib.sol";
 
-// import {console2} from "../../lib/forge-std/src/Console2.sol";
-
 /**
  * @title ERC721Core
  * @author Zodomo.eth (Farcaster/Telegram/Discord/Github: @zodomo, X: @0xZodomo, Email: zodomo@proton.me)
@@ -29,8 +27,9 @@ import { FixedPointMathLib as FPML } from "../../lib/solady/src/utils/FixedPoint
 
 // REMEMBER TO ADD BACK ERC721x capabilities
 contract ERC721Core is Core, CoreBlacklist, CoreList, CoreMetadata721, CoreReferral, CoreRoyalty, Initializable {
-    function _canMint(uint256 amount_) internal view override returns (uint256 tokenAmount_) {
+    function _canMint(uint256 amount_) internal view override returns (uint32 tokenAmount_) {
         tokenAmount_ = Core._canMint(amount_);
+
         _requireUnreservedSupply(tokenAmount_, _totalSupply, maxSupply);
     }
 
@@ -79,9 +78,10 @@ contract ERC721Core is Core, CoreBlacklist, CoreList, CoreMetadata721, CoreRefer
         address owner_, // Collection contract owner
         uint256 price_ // Price (~1.2M ETH max)
     ) internal virtual onlyInitializing {
+        _pause();
+
         _initializeOwner(owner_);
         _setRoyalties(owner_, royalty_);
-
         _name = name_;
         _symbol = symbol_;
 
@@ -117,12 +117,32 @@ contract ERC721Core is Core, CoreBlacklist, CoreList, CoreMetadata721, CoreRefer
     // >>>>>>>>>>>> [ INTERNAL FUNCTIONS ] <<<<<<<<<<<<
 
     /**
+     * @notice Internal mint function for mints that do not require list logic.
+     * @dev Implements referral logic.
+     * @param recipient_ The address of the recipient.
+     * @param amount_ The amount_ of tokens to mint.
+     * @param referral_ The address of the referrer.
+     */
+    function _handleMint(address recipient_, uint256 amount_, address referral_) internal virtual {
+        uint32 tokenAmount = _canMint(amount_);
+
+        _handleReferral(referral_, recipient_);
+
+        unchecked {
+            _claimed[msg.sender] += tokenAmount;
+        }
+
+        // Process ERC721 mints
+        _mintBatch(recipient_, tokenAmount);
+    }
+
+    /**
      * @notice Internal mint function that supports batch minting.
      * @dev Implements blacklist logic.
      * @param recipient_ The address of the recipient.
      * @param amount_ The amount of tokens to mint.
      */
-    function _mint(address recipient_, uint32 amount_) internal virtual {
+    function _mintBatch(address recipient_, uint32 amount_) internal virtual {
         //@TODO if recipient is not msg.sender consider emitting another event
         // Prevent bad inputs
         if (recipient_ == address(0) || amount_ == 0) revert NotZero();
@@ -142,26 +162,6 @@ contract ERC721Core is Core, CoreBlacklist, CoreList, CoreMetadata721, CoreRefer
 
     /**
      * @notice Internal mint function for mints that do not require list logic.
-     * @dev Implements referral logic.
-     * @param recipient_ The address of the recipient.
-     * @param amount_ The amount_ of tokens to mint.
-     * @param referral_ The address of the referrer.
-     */
-    function _handleMint(address recipient_, uint256 amount_, address referral_) internal virtual {
-        uint256 tokenAmount = _canMint(amount_);
-
-        _handleReferral(referral_, recipient_);
-
-        unchecked {
-            _claimed[msg.sender] += tokenAmount;
-        }
-
-        // Process ERC721 mints
-        _mint(recipient_, tokenAmount);
-    }
-
-    /**
-     * @notice Internal mint function for mints that do not require list logic.
      * @dev Implements referral fee logic.
      * @param recipient_ The address of the recipient.
      * @param amount_ The amount_ of tokens to mint.
@@ -176,7 +176,7 @@ contract ERC721Core is Core, CoreBlacklist, CoreList, CoreMetadata721, CoreRefer
     ) internal virtual {
         _handleReferral(referral_, recipient_);
 
-        (uint256 tokenAmount, uint256 cost, bool reserved) = _canMintList(proof_, listId_, amount_);
+        (uint256 cost, uint32 tokenAmount, bool reserved) = _canMintList(proof_, listId_, amount_);
 
         if (msg.value < cost) revert InsufficientPayment();
 
@@ -184,7 +184,7 @@ contract ERC721Core is Core, CoreBlacklist, CoreList, CoreMetadata721, CoreRefer
 
         if (!reserved) _requireUnreservedSupply(tokenAmount, _totalSupply, maxSupply);
 
-        _mint(recipient_, tokenAmount);
+        _mintBatch(recipient_, tokenAmount);
         emit ListMinted(msg.sender, listId_, tokenAmount);
     }
 

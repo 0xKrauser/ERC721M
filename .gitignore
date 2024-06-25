@@ -13,3 +13,6 @@ docs/
 
 # Node modules
 node_modules/
+
+gas-cost.txt
+contract-size.txt

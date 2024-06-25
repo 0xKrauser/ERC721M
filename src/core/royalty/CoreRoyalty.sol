@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.23;
 
-import {ICoreRoyalty, IERC165} from "./ICoreRoyalty.sol";
-import {NotZero} from "../ICore.sol";
+import { ICoreRoyalty, IERC165 } from "./ICoreRoyalty.sol";
+import { NotZero } from "../ICore.sol";
 
-import {ERC2981} from "../../../lib/solady/src/tokens/ERC2981.sol";
+import { ERC2981 } from "../../../lib/solady/src/tokens/ERC2981.sol";
 
 abstract contract CoreRoyalty is ICoreRoyalty, ERC2981 {
     //@TODO opinionated? might consider to move it in factory
@@ -13,7 +13,7 @@ abstract contract CoreRoyalty is ICoreRoyalty, ERC2981 {
 
     function _requireRoyaltiesEnabled() internal view {
         // Revert if royalties are disabled
-        (address receiver,) = royaltyInfo(0, 0);
+        (address receiver, ) = royaltyInfo(0, 0);
         if (receiver == address(0)) revert DisabledRoyalties();
     }
 
@@ -50,6 +50,6 @@ abstract contract CoreRoyalty is ICoreRoyalty, ERC2981 {
     }
 
     function supportsInterface(bytes4 interfaceId_) public view virtual override(ERC2981, IERC165) returns (bool) {
-        return ERC2981.supportsInterface(interfaceId_) || interfaceId_ == type(IERC165).interfaceId;
+        return ERC2981.supportsInterface(interfaceId_);
     }
 }
