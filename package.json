@@ -3,36 +3,54 @@
     "description": "",
     "version": "0.1.0",
     "author": {
-      "name": "Zodomo.eth",
-      "url": "https://github.com/zodomo"
+        "name": "Zodomo.eth",
+        "url": "https://github.com/zodomo"
     },
     "dependencies": {
+        "@common-resources/crate": "0.1.0",
+        "@openzeppelin/contracts": "^5.0.2",
+        "AlignmentVault": "github:zodomo/AlignmentVault",
+        "ERC721x": "github:zodomo/ERC721x",
+        "solady": "github:vectorized/solady"
     },
     "devDependencies": {
-      "forge-std": "github:foundry-rs/forge-std#v1.8.2",
-      "prettier": "^3.3.2",
-      "solhint": "^5.0.1"
+        "4naly3er": "Picodes/4naly3er",
+        "@types/dotenv": "^8.2.0",
+        "@types/node": "^20.12.11",
+        "cross-env": "^7.0.3",
+        "dotenv-cli": "^7.3.0",
+        "forge-std": "github:foundry-rs/forge-std#v1.9.1",
+        "prettier": "^3.2.5",
+        "prettier-plugin-solidity": "^1.3.0",
+        "solhint": "^5.0.0",
+        "solhint-plugin-prettier": "^0.1.0",
+        "ts-node": "^10.7.0"
     },
     "keywords": [
-      "blockchain",
-      "ethereum",
-      "forge",
-      "foundry",
-      "smart-contracts",
-      "solidity",
-      "template"
+        "blockchain",
+        "ethereum",
+        "forge",
+        "foundry",
+        "smart-contracts",
+        "solidity",
+        "template"
     ],
     "private": true,
     "scripts": {
-      "clean": "rm -rf cache out",
-      "build": "forge build",
-      "lint": "yarn lint:sol && yarn prettier:check",
-      "lint:sol": "forge fmt --check && yarn solhint {script,src,test}/**/*.sol",
-      "prettier:check": "prettier --check \"**/*.{json,md,yml}\" --ignore-path \".prettierignore\"",
-      "prettier:write": "prettier --write \"**/*.{json,md,yml}\" --ignore-path \".prettierignore\"",
-      "test": "forge test",
-      "test:coverage": "forge coverage",
-      "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
+        "analyze": "yarn --cwd ./node_modules/4naly3er/ analyze ../../src/contracts && cp ./node_modules/4naly3er/report.md 4naly3e-report.md",
+        "build": "forge build --sizes",
+        "check:license": "pipx run reuse lint",
+        "clean": "rm -rf cache out",
+        "lint:ts": "eslint --config ./.eslintrc.json --ignore-path ./.eslintignore --ext .js,.ts . --fix",
+        "slither": "pipx run --spec slither-analyzer slither . --skip-assembly --include-paths ./src/contracts",
+        "format:check": "forge fmt --check && prettier --check **/*.{json,md,yml} --ignore-path=.prettierignore",
+        "format:fix": "forge fmt && prettier --write **/*.{json,md,yml} --ignore-path=.prettierignore",
+        "test": "forge test --gas-report",
+        "lint": "yarn lint:sol && yarn prettier:check",
+        "lint:sol": "forge fmt --check && yarn solhint {script,src,test}/**/*.sol",
+        "prettier:check": "prettier --check \"**/*.{json,md,yml}\" --ignore-path \".prettierignore\"",
+        "prettier:write": "prettier --write \"**/*.{json,md,yml}\" --ignore-path \".prettierignore\"",
+        "test:coverage": "forge coverage --nmco '.*\\.(t|s)\\.sol$'",
+        "test:coverage:report": "forge coverage --nmco '.*\\.(t|s)\\.sol$' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
     }
-  }
-  
+}

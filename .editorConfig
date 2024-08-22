@@ -1,4 +1,10 @@
-# EditorConfig  http://EditorConfig.org
+# SPDX-License-Identifier: NOASSERTION
+#
+# SPDX-FileType: SOURCE
+#
+# SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
+# 
+# SPDX-FileContributor: Zodomo <zodomo@proton.me>
 
 # top-most EditorConfig file
 root = true

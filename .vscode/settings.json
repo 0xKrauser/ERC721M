@@ -2,12 +2,15 @@
     "editor.fontFamily": "'Terminus (TTF)', 'Droid Sans Mono', 'monospace', monospace",
     "editor.fontWeight": "300",
     "editor.fontSize": 16,
-    "solidity.compileUsingRemoteVersion": "v0.8.23+commit.f704f362",
-    "[solidity]": {
-        "editor.defaultFormatter": "JuanBlanco.solidity"
-    },
-    "solidity.formatter": "prettier",
+    "solidity.compileUsingRemoteVersion": "v0.8.26+commit.8a97fa7a",
     "solidity.packageDefaultDependenciesDirectory": "lib",
     "solidity.packageDefaultDependenciesContractsDirectory": "lib",
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "[solidity]": {
+        "editor.defaultFormatter": "NomicFoundation.hardhat-solidity"
+    },
+    "[toml]": {
+        "editor.defaultFormatter": "tamasfe.even-better-toml"
+    },
+    "solidity.formatter": "forge"
 }

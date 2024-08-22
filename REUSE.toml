@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: CC0-1.0
+#
+# SPDX-FileType: SOURCE
+#
+# SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
+# 
+# SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz>
+version = 1
+SPDX-PackageName = "ERC721M"
+SPDX-PackageSupplier = "Zodomo <zodomo@proton.me>"
+SPDX-PackageDownloadLocation = "https://github.com/zodomo/ERC721M"
+
+[[annotations]]
+path = [
+    ".vscode/extensions.json",
+    ".vscode/settings.json",
+    ".solhint.json",
+    "package.json",
+    "remappings.txt",
+    "lcov.info",
+    "yarn.lock",
+    ".github/workflows/test.yml",
+    "README.md",
+    "img/icon.png",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>"
+SPDX-License-Identifier = "NOASSERTION"
+
+[[annotations]]
+path = ["4naly3e-report.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>"
+SPDX-FileType = "TEXT"
+SPDX-License-Identifier = "NOASSERTION"

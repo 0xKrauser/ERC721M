@@ -1,0 +1,430 @@
+/*
+ * SPDX-License-Identifier: AGPL-3.0
+ *
+ * SPDX-FileType: SOURCE
+ *
+ * SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
+ *
+ * SPDX-FileContributor: Zodomo <zodomo@proton.me>
+ * SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ */
+pragma solidity ^0.8.23;
+
+import "./_Test.sol";
+
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+
+import "AlignmentVault/src/IAlignmentVault.sol";
+import "solady/src/auth/Ownable.sol";
+
+import "solady/src/tokens/ERC2981.sol";
+import "solady/src/utils/FixedPointMathLib.sol";
+import "solady/test/utils/mocks/MockERC20.sol";
+import "solady/test/utils/mocks/MockERC721.sol";
+
+import {Crate721M} from "../contracts/Crate721M.sol";
+import {IAlignmentVault as InterfaceAlignmentVault} from "../contracts/interface/IAlignmentVault.sol";
+import "../contracts/interface/ICrate721M.sol";
+
+import {Core, ICore, Ownable, Pausable, ReentrancyGuard} from "@common-resources/crate/contracts/Core.sol";
+import {ERC721Crate} from "@common-resources/crate/contracts/ERC721Crate.sol";
+
+import "@common-resources/crate/contracts/extensions/referral/ReferralExt.sol";
+import "@common-resources/crate/contracts/extensions/royalty/RoyaltyExt.sol";
+import "@common-resources/crate/contracts/metadata/CoreMetadata721.sol";
+import "solady/src/utils/LibClone.sol";
+
+interface IFallback {
+    function doesntExist(uint256 _unusedVar) external payable;
+}
+
+contract BetaCrate721MTest is TestWithHelpers, ERC721Holder {
+    using LibString for uint256;
+
+    Crate721M public template;
+    Crate721M public manualInit;
+    IERC721 public nft = IERC721(0xeA9aF8dBDdE2A8d3515C3B4E446eCd41afEdB1C6); // Milady NFT
+    MockERC20 public testToken;
+    MockERC721 public testNFT;
+
+    function setUp() public {
+        vm.createSelectFork("sepolia");
+        address original = address(new Crate721M());
+        address clone = LibClone.clone(original);
+
+        template = Crate721M(payable(clone));
+        address cloneManual = LibClone.clone(original);
+        manualInit = Crate721M(payable(cloneManual));
+        template.initialize(
+            "Crate721M Test", "Crate721M", 100, 500, 2000, address(this), address(nft), 0.01 ether, 21, bytes32("")
+        );
+        template.setBaseURI("https://miya.wtf/api/", "");
+        template.setContractURI("https://miya.wtf/api/contract.json");
+        vm.deal(address(this), 1000 ether);
+        testToken = new MockERC20("Test Token", "TEST", 18);
+        testToken.mint(address(this), 100 ether);
+        testNFT = new MockERC721();
+        testNFT.safeMint(address(this), 1);
+        testNFT.safeMint(address(this), 2);
+        testNFT.safeMint(address(this), 3);
+    }
+
+    function testInitialize(
+        string memory name,
+        string memory symbol,
+        string memory baseURI,
+        uint32 maxSupply,
+        uint16 royalty,
+        uint16 allocation,
+        bytes32 ownerSeed,
+        uint80 price,
+        bool vaultId
+    )
+        public
+    {
+        vm.assume(bytes(name).length > 0 && bytes(symbol).length > 0 && bytes(baseURI).length > 0);
+        address owner = _bytesToAddress(ownerSeed);
+        uint96 _vaultId;
+        if (vaultId) _vaultId = 21;
+
+        if (royalty > 1000) {
+            vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+            manualInit.initialize(
+                name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
+            );
+            return;
+        }
+
+        if (allocation > 10_000) {
+            vm.expectRevert(ICrate721M.AllocationOutOfBounds.selector);
+            manualInit.initialize(
+                name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
+            );
+            return;
+        }
+
+        manualInit.initialize(
+            name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
+        );
+        vm.prank(owner);
+        manualInit.setBaseURI(baseURI, "");
+        vm.prank(owner);
+        manualInit.setContractURI("https://miya.wtf/api/contract.json");
+
+        assertEq(abi.encode(name), abi.encode(manualInit.name()), "name error");
+        assertEq(abi.encode(symbol), abi.encode(manualInit.symbol()), "symbol error");
+        assertEq(abi.encode(baseURI), abi.encode(manualInit.baseURI()), "baseURI error");
+        assertEq(maxSupply, manualInit.maxSupply(), "maxSupply error");
+        (, uint256 _royalty) = manualInit.royaltyInfo(0, 1 ether);
+        assertEq(royalty, (_royalty * 10_000) / 1 ether, "royalty error");
+        assertEq(allocation, manualInit.minAllocation(), "allocation error");
+        assertEq(owner, manualInit.owner(), "owner error");
+    }
+
+    function testSupportsInterface(bytes4 interfaceId) public view {
+        console2.logBytes4(interfaceId);
+        if (
+            interfaceId == 0x2a55205a // ERC2981
+                // interfaceId == 0x706e8489 || // ERC721x
+                || interfaceId == 0x80ac58cd // ERC721
+                || interfaceId == 0x5b5e139f // Crate721Metadata
+                || interfaceId == 0x01ffc9a7 // ERC165
+        ) assertEq(template.supportsInterface(interfaceId), true, "supportsInterface error");
+        else assertEq(template.supportsInterface(interfaceId), false, "supportsInterface error");
+    }
+
+    function testMint(bytes32 callerSalt, uint256 amount) public {
+        vm.assume(callerSalt != bytes32(""));
+        address caller = _bytesToAddress(callerSalt);
+        amount = bound(amount, 0, 100);
+        vm.deal(caller, (amount * 0.01 ether) + 0.01 ether);
+
+        template.unpause();
+
+        vm.prank(caller);
+        if (amount == 0) {
+            template.mint{value: 0.01 ether}();
+            assertEq(template.balanceOf(caller), 1, "balanceOf error");
+            assertEq(template.totalSupply(), 1, "totalSupply error");
+            assertEq(address(template).balance, 0.008 ether, "template balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether, "vault balance error");
+        } else {
+            template.mint{value: 0.01 ether * amount}(amount);
+            assertEq(template.balanceOf(caller), amount, "balanceOf error");
+            assertEq(template.totalSupply(), amount, "totalSupply error");
+            assertEq(address(template).balance, 0.008 ether * amount, "template balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether * amount, "vault balance error");
+        }
+    }
+
+    function testMint(bytes32 callerSalt, bytes32 recipientSalt, uint256 amount) public {
+        vm.assume(callerSalt != bytes32(""));
+        vm.assume(recipientSalt != bytes32(""));
+        vm.assume(callerSalt != recipientSalt);
+        address caller = _bytesToAddress(callerSalt);
+        address recipient = _bytesToAddress(recipientSalt);
+        amount = bound(amount, 0, 100);
+        vm.deal(caller, (amount * 0.01 ether) + 0.01 ether);
+
+        template.unpause();
+
+        vm.prank(caller);
+        if (amount == 0) {
+            template.mint{value: 0.01 ether}(recipient, 1, 2000);
+            assertEq(template.balanceOf(recipient), 1, "balanceOf error");
+            assertEq(template.totalSupply(), 1, "totalSupply error");
+            assertEq(address(template).balance, 0.008 ether, "template balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether, "vault balance error");
+        } else {
+            template.mint{value: 0.01 ether * amount}(recipient, amount, 2000);
+            assertEq(template.balanceOf(recipient), amount, "balanceOf error");
+            assertEq(template.totalSupply(), amount, "totalSupply error");
+            assertEq(address(template).balance, 0.008 ether * amount, "template balance error");
+            assertEq(address(template.alignmentVault()).balance, 0.002 ether * amount, "vault balance error");
+        }
+    }
+
+    function testMint(
+        bytes32 callerSalt,
+        bytes32 referrerSalt,
+        bytes32 recipientSalt,
+        uint16 referralFee,
+        uint256 amount
+    )
+        public
+    {
+        vm.assume(callerSalt != referrerSalt && callerSalt != recipientSalt && referrerSalt != recipientSalt);
+        vm.assume(callerSalt != bytes32(""));
+        vm.assume(referrerSalt != bytes32(""));
+        vm.assume(recipientSalt != bytes32(""));
+        address caller = _bytesToAddress(callerSalt);
+        address referrer = _bytesToAddress(referrerSalt);
+        address recipient = _bytesToAddress(recipientSalt);
+        referralFee = uint16(bound(referralFee, 1, 8000));
+        amount = bound(amount, 1, 100);
+        vm.deal(caller, amount * 0.01 ether);
+
+        template.setReferralFee(referralFee);
+        template.unpause();
+
+        uint256 refFee = FixedPointMathLib.mulDivUp(referralFee * amount, 0.01 ether, 10_000);
+        vm.prank(caller);
+        template.mint{value: 0.01 ether * amount}(recipient, amount, referrer, 2000);
+        assertEq(template.balanceOf(recipient), amount, "balanceOf error");
+        assertEq(template.totalSupply(), amount, "totalSupply error");
+        assertEq(address(referrer).balance, refFee, "referrer balance error");
+        assertEq(address(template).balance, (0.008 ether * amount) - refFee, "template balance error");
+        assertEq(address(template.alignmentVault()).balance, 0.002 ether * amount, "vault balance error");
+    }
+
+    function testSetReferralFee(uint16 referralFee, uint16 invalidFee) public {
+        referralFee = uint16(bound(referralFee, 1, 8000));
+        invalidFee = uint16(bound(invalidFee, 10_001, type(uint16).max));
+
+        template.setReferralFee(referralFee);
+
+        assertEq(template.referralFee(), referralFee, "referralFee error");
+
+        vm.expectRevert(IReferralExt.MaxReferral.selector);
+        template.setReferralFee(invalidFee);
+    }
+
+    function testSetBaseURI(string memory baseURI) public {
+        vm.assume(bytes(baseURI).length > 0);
+
+        template.setBaseURI(baseURI, "");
+
+        assertEq(template.baseURI(), baseURI, "baseURI error");
+
+        template.freezeURI();
+        vm.expectRevert(ICoreMetadata.URIPermanent.selector);
+        template.setBaseURI(baseURI, "");
+    }
+
+    function testFreezeURI() public {
+        template.freezeURI();
+        assertEq(template.permanentURI(), true, "uriLocked error");
+    }
+
+    function testSetPrice(uint80 price) public {
+        template.setPrice(price);
+        assertEq(template.price(), price, "price error");
+    }
+
+    function testSetRoyalties(bytes32 recipientSalt, uint96 royaltyFee, uint96 invalidFee) public {
+        vm.assume(recipientSalt != bytes32(""));
+        address recipient = _bytesToAddress(recipientSalt);
+        royaltyFee = uint96(bound(royaltyFee, 0, 1000));
+        invalidFee = uint96(bound(invalidFee, 1001, type(uint96).max));
+
+        template.setRoyalties(recipient, royaltyFee);
+
+        (, uint256 royalty) = template.royaltyInfo(1, 1 ether);
+        assertEq(royaltyFee, (royalty * 10_000) / 1 ether, "royalty error");
+
+        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        template.setRoyalties(recipient, invalidFee);
+
+        template.disableRoyalties();
+        vm.expectRevert(IRoyaltyExt.DisabledRoyalties.selector);
+        template.setRoyalties(recipient, royaltyFee);
+    }
+
+    function testSetRoyaltiesForId(
+        uint256 tokenId,
+        bytes32 recipientSalt,
+        uint96 royaltyFee,
+        uint96 invalidFee
+    )
+        public
+    {
+        tokenId = bound(tokenId, 1, type(uint40).max);
+        vm.assume(recipientSalt != bytes32(""));
+        address recipient = _bytesToAddress(recipientSalt);
+        royaltyFee = uint96(bound(royaltyFee, 1, 1000));
+        invalidFee = uint96(bound(invalidFee, 1001, type(uint96).max));
+
+        template.setTokenRoyalties(tokenId, recipient, royaltyFee);
+
+        (, uint256 royalty) = template.royaltyInfo(tokenId, 1 ether);
+        assertEq(royaltyFee, (royalty * 10_000) / 1 ether, "royalty error");
+
+        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        template.setTokenRoyalties(tokenId, recipient, invalidFee);
+        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        template.setTokenRoyalties(0, recipient, invalidFee);
+
+        template.disableRoyalties();
+        vm.expectRevert(IRoyaltyExt.DisabledRoyalties.selector);
+        template.setTokenRoyalties(tokenId, recipient, royaltyFee);
+    }
+
+    function testDisableRoyalties(uint256 tokenId) public {
+        tokenId = bound(tokenId, 0, type(uint40).max);
+        template.disableRoyalties();
+        (address recipient, uint256 royalty) = manualInit.royaltyInfo(tokenId, 1 ether);
+        assertEq(recipient, address(0), "royalty recipient error");
+        assertEq(royalty, 0, "royalty fee error");
+    }
+
+    function testOpenMint() public {
+        template.unpause();
+        assertEq(template.paused(), false, "mintOpen error");
+    }
+
+    function testIncreaseAlignment(
+        uint16 minAllocation,
+        uint16 maxAllocation,
+        uint16 invalidMinAllocation,
+        uint16 invalidMaxAllocation
+    )
+        public
+    {
+        minAllocation = uint16(bound(minAllocation, 2001, 10_000));
+        maxAllocation = uint16(bound(maxAllocation, minAllocation, 10_000));
+        invalidMinAllocation = uint16(bound(invalidMinAllocation, 10_001, type(uint16).max));
+        invalidMaxAllocation = uint16(bound(invalidMaxAllocation, 10_001, type(uint16).max));
+
+        console2.log(minAllocation);
+        template.setAllocation(minAllocation, maxAllocation);
+        assertEq(template.minAllocation(), minAllocation, "min allocation error");
+        assertEq(template.maxAllocation(), maxAllocation, "max allocation error");
+
+        vm.expectRevert(ICrate721M.AllocationOutOfBounds.selector);
+        template.setAllocation(invalidMinAllocation, maxAllocation);
+
+        vm.expectRevert(ICrate721M.AllocationOutOfBounds.selector);
+        template.setAllocation(minAllocation, invalidMaxAllocation);
+    }
+
+    function testDecreaseSupply(uint256 amount, uint32 newSupply, uint32 invalidSupply) public {
+        amount = bound(amount, 1, 99);
+        newSupply = uint32(bound(newSupply, amount, 99));
+        invalidSupply = uint32(bound(invalidSupply, newSupply + 1, type(uint32).max));
+
+        template.unpause();
+        template.mint{value: 0.01 ether * amount}(amount);
+        template.setSupply(newSupply);
+        assertEq(template.maxSupply(), newSupply, "newSupply error");
+
+        vm.expectRevert(ICore.MaxSupply.selector);
+        template.setSupply(invalidSupply);
+    }
+    //@TODO: fix this test
+    /*
+    function testUpdateApprovedContracts(address[] memory contracts) public {
+        bool[] memory status = new bool[](contracts.length);
+        for (uint256 i; i < contracts.length; ) {
+            status[i] = true;
+            unchecked {
+                ++i;
+            }
+        }
+
+        template.updateApprovedContracts(contracts, status);
+        for (uint256 i; i < contracts.length; ) {
+            assertEq(template.approvedContract(contracts[i]), true, "approvedContract error");
+            unchecked {
+                ++i;
+            }
+        }
+    }
+    */
+
+    function testWithdrawFunds(bytes32 callerSalt, bytes32 recipientSalt, uint256 amount) public {
+        vm.assume(callerSalt != recipientSalt);
+        vm.assume(callerSalt != bytes32(""));
+        vm.assume(recipientSalt != bytes32(""));
+        address caller = _bytesToAddress(callerSalt);
+        address recipient = _bytesToAddress(recipientSalt);
+        amount = bound(amount, 1, 100);
+        vm.deal(caller, 0.01 ether * amount);
+
+        template.unpause();
+
+        vm.prank(caller);
+        template.mint{value: 0.01 ether * amount}(recipient, amount, 2000);
+
+        vm.expectRevert(NotZero.selector);
+        template.withdraw(address(0), type(uint256).max);
+
+        vm.prank(recipient);
+        vm.expectRevert(Ownable.Unauthorized.selector);
+        template.withdraw(caller, type(uint256).max);
+
+        template.withdraw(recipient, 0.001 ether);
+        assertEq(address(recipient).balance, 0.001 ether, "partial recipient balance error");
+        template.withdraw(recipient, type(uint256).max);
+        assertEq(address(recipient).balance, 0.008 ether * amount, "full recipient balance error");
+    }
+
+    function testFallback() public {
+        address av = template.alignmentVault();
+        payable(av).call{value: 1 ether}("");
+        Ownable(av).transferOwnership(address(template));
+        // IAlignmentVault(address(template)).wrapEth(1 ether);
+    }
+
+    function testCustomMint() public {
+        template.setList(
+            0, // price
+            0, // listId
+            0x2733c38db000155462a813b4e01c2805062f66585041f82047d37e520804e232, // list merkle root
+            5, // userSupply
+            10, // maxSupply
+            0, // startBlock
+            0, // endBlock
+            1, // unit
+            false, // paused
+            false // reserved
+        );
+        // template.unpause();
+        bytes32[] memory proof = new bytes32[](3);
+        proof[0] = 0x3bd5223715c2aeb242433e85b4d9ce89738d6938a23826eca19bb6828d8a1bb9;
+        proof[1] = 0x8690ad9107ee95de79bb75185a25db961b1014009e89c3f55700d91f792d445b;
+        proof[2] = 0xbc3712ad9f7d1b20bfd5274a92a7026cb4ffd2ef26dfb2701b5119d924475930;
+        vm.prank(address(0x420));
+        template.mint(proof, 1, address(0x420), 5, address(0));
+    }
+}
