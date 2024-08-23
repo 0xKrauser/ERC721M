@@ -201,7 +201,7 @@ contract Crate721M is ERC721Crate, ICrate721M {
         returns (bytes4 magicBytes)
     {
         address nft = IAlignmentVault(alignmentVault).alignedNft();
-        if (msg.sender == nft) _sendERC721(address(this), alignmentVault, _tokenId);
+        if (msg.sender == nft) _sendERC721(nft, alignmentVault, _tokenId);
         else revert NotAligned();
         return Crate721M.onERC721Received.selector;
     }

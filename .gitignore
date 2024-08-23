@@ -15,6 +15,7 @@ broadcast/
 
 # Docs
 docs/
+coverage/
 
 # Dotenv file
 .env
