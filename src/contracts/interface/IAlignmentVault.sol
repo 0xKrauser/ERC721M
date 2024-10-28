@@ -7,7 +7,7 @@
  * 
  * SPDX-FileContributor: Zodomo <zodomo@proton.me> 
  */
-pragma solidity 0.8.26;
+pragma solidity 0.8.23;
 
 interface IAlignmentVault {
     function vault() external view returns (address);

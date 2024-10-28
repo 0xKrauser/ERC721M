@@ -6,7 +6,7 @@
  * SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
  *
  * SPDX-FileContributor: Zodomo <zodomo@proton.me>
- * SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ * SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz>
  */
 pragma solidity ^0.8.23;
 

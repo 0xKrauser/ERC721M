@@ -3,20 +3,20 @@
 #
 # SPDX-FileType: SOURCE
 #
-# SPDX-FileCopyrightText: 2024 Johannes Krauser III <detroitmetalcrypto@gmail.com>
+# SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>
 # 
-# SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com>
+# SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz>
 
 [profile.default]
 auto_detect_solc = false
-evm_version = "cancun"
+evm_version = "paris"
 bytecode_hash = "none"
 fuzz = { runs = 10 }
 gas_reports = ["*"]
 optimizer = true
 out = "out"
-script = "script"
-solc = "0.8.26"
+script = "src/script"
+solc = "0.8.23"
 src = "src/contracts"
 test = "src/test"
 libs = ["node_modules", "lib"]

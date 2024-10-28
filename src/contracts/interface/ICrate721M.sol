@@ -3,11 +3,11 @@
  *
  * SPDX-FileType: SOURCE
  *
- * SPDX-FileCopyrightText: 2024 Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ * SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>
  * 
- * SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com> 
+ * SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz> 
  */
-pragma solidity 0.8.26;
+pragma solidity 0.8.23;
 
 interface ICrate721M {
     // >>>>>>>>>>>> [ ERRORS ] <<<<<<<<<<<<

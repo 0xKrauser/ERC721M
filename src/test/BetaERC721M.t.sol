@@ -6,7 +6,7 @@
  * SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
  *
  * SPDX-FileContributor: Zodomo <zodomo@proton.me>
- * SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ * SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz>
  */
 pragma solidity ^0.8.23;
 
@@ -88,8 +88,8 @@ contract BetaCrate721MTest is TestWithHelpers, ERC721Holder {
         uint96 _vaultId;
         if (vaultId) _vaultId = 21;
 
-        if (royalty > 1000) {
-            vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        if (royalty > 10_000) {
+            vm.expectRevert(ERC2981.RoyaltyOverflow.selector);
             manualInit.initialize(
                 name, symbol, maxSupply, royalty, allocation, owner, address(nft), price, _vaultId, bytes32("")
             );
@@ -256,14 +256,14 @@ contract BetaCrate721MTest is TestWithHelpers, ERC721Holder {
         vm.assume(recipientSalt != bytes32(""));
         address recipient = _bytesToAddress(recipientSalt);
         royaltyFee = uint96(bound(royaltyFee, 0, 1000));
-        invalidFee = uint96(bound(invalidFee, 1001, type(uint96).max));
+        invalidFee = uint96(bound(invalidFee, 10_001, type(uint96).max));
 
         template.setRoyalties(recipient, royaltyFee);
 
         (, uint256 royalty) = template.royaltyInfo(1, 1 ether);
         assertEq(royaltyFee, (royalty * 10_000) / 1 ether, "royalty error");
 
-        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        vm.expectRevert(ERC2981.RoyaltyOverflow.selector);
         template.setRoyalties(recipient, invalidFee);
 
         template.disableRoyalties();
@@ -283,16 +283,16 @@ contract BetaCrate721MTest is TestWithHelpers, ERC721Holder {
         vm.assume(recipientSalt != bytes32(""));
         address recipient = _bytesToAddress(recipientSalt);
         royaltyFee = uint96(bound(royaltyFee, 1, 1000));
-        invalidFee = uint96(bound(invalidFee, 1001, type(uint96).max));
+        invalidFee = uint96(bound(invalidFee, 10_001, type(uint96).max));
 
         template.setTokenRoyalties(tokenId, recipient, royaltyFee);
 
         (, uint256 royalty) = template.royaltyInfo(tokenId, 1 ether);
         assertEq(royaltyFee, (royalty * 10_000) / 1 ether, "royalty error");
 
-        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        vm.expectRevert(ERC2981.RoyaltyOverflow.selector);
         template.setTokenRoyalties(tokenId, recipient, invalidFee);
-        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        vm.expectRevert(NotZero.selector);
         template.setTokenRoyalties(0, recipient, invalidFee);
 
         template.disableRoyalties();

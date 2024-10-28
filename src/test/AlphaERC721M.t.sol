@@ -6,7 +6,7 @@
  * SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
  *
  * SPDX-FileContributor: Zodomo <zodomo@proton.me>
- * SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ * SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz>
  */
 pragma solidity ^0.8.23;
 
@@ -28,6 +28,9 @@ import "@common-resources/crate/contracts/extensions/royalty/RoyaltyExt.sol";
 import "@common-resources/crate/contracts/metadata/CoreMetadata721.sol";
 
 import "solady/src/auth/Ownable.sol";
+
+import {MintList} from "@common-resources/crate/contracts/extensions/lists/IMintlistExt.sol";
+import "solady/src/tokens/ERC2981.sol";
 import "solady/src/utils/LibClone.sol";
 
 contract AlphaCrate721MTest is TestWithHelpers, ERC721Holder {
@@ -99,7 +102,7 @@ contract AlphaCrate721MTest is TestWithHelpers, ERC721Holder {
         manualInit.initialize(
             "Crate721M Test", "Crate721M", 100, 500, 10_001, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );
-        vm.expectRevert(IRoyaltyExt.MaxRoyalties.selector);
+        vm.expectRevert(ERC2981.RoyaltyOverflow.selector);
         manualInit.initialize(
             "Crate721M Test", "Crate721M", 100, 10_001, 2000, address(this), address(nft), 0.01 ether, 21, bytes32("")
         );

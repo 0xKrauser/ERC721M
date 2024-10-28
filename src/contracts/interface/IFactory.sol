@@ -7,7 +7,7 @@
  * 
  * SPDX-FileContributor: Zodomo <zodomo@proton.me> 
  */
-pragma solidity 0.8.26;
+pragma solidity 0.8.23;
 
 interface IFactory {
     function deploy(address vaultOwner, address alignedNft, uint96 vaultId) external returns (address);

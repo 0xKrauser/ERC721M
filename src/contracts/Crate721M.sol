@@ -6,9 +6,9 @@
  * SPDX-FileCopyrightText: 2024 Johannes Krauser III <krauser@co.xyz>, Zodomo <zodomo@proton.me>
  *
  * SPDX-FileContributor: Zodomo <zodomo@proton.me>
- * SPDX-FileContributor: Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ * SPDX-FileContributor: Johannes Krauser III <krauser@co.xyz>
  */
-pragma solidity 0.8.26;
+pragma solidity 0.8.23;
 
 import {IAlignmentVault} from "./interface/IAlignmentVault.sol";
 
@@ -18,15 +18,15 @@ import {IFactory} from "./interface/IFactory.sol";
 import {ERC721Crate} from "@common-resources/crate/contracts/ERC721Crate.sol";
 import {TransferFailed} from "@common-resources/crate/contracts/ICore.sol";
 
+import {ERC20 as tERC20} from "@common-resources/crate/contracts/types/tERC20.sol";
 import {FixedPointMathLib as FPML} from "solady/src/utils/FixedPointMathLib.sol";
-import {ERC20 as tERC20} from "token-types/src/ERC20.sol";
 
 import {LibClone} from "solady/src/utils/LibClone.sol";
 
 /**
  * @title Crate721M
  * @author Zodomo.eth (Farcaster/Telegram/Discord/Github: @zodomo, X: @0xZodomo, Email: zodomo@proton.me)
- * @author Johannes Krauser III <detroitmetalcrypto@gmail.com>
+ * @author Johannes Krauser III <krauser@co.xyz>
  * @notice ERC721 Crate with derivative capabilities
  */
 contract Crate721M is ERC721Crate, ICrate721M {

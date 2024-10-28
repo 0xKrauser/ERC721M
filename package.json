@@ -1,13 +1,13 @@
 {
     "name": "ERC721M",
     "description": "",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "author": {
         "name": "Zodomo.eth",
         "url": "https://github.com/zodomo"
     },
     "dependencies": {
-        "@common-resources/crate": "0.1.0",
+        "@common-resources/crate": "^0.1.4",
         "@openzeppelin/contracts": "^5.0.2",
         "AlignmentVault": "github:zodomo/AlignmentVault",
         "ERC721x": "github:zodomo/ERC721x",

@@ -90,10 +90,10 @@
     js-tokens "^4.0.0"
     picocolors "^1.0.0"
 
-"@common-resources/crate@0.1.0":
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/@common-resources/crate/-/crate-0.1.0.tgz#7b5f1ba94bc6940f5bae312b51dce94078330a76"
-  integrity sha512-zT8W1AWA+EIhCXE5Mp02NUaKnlCZS4qIUAwcNZSXEd1wqT8KyRqiUQYXveFk82JygLGFhNqQzmMMXMJxM7FRDg==
+"@common-resources/crate@^0.1.4":
+  version "0.1.4"
+  resolved "https://registry.yarnpkg.com/@common-resources/crate/-/crate-0.1.4.tgz#2e5a45e898126c3d2464d95c508322293ef93d1c"
+  integrity sha512-AhFt7CNaxM4oUm/9IZOxBvpvRqBTWvaYPpwgMIpjWyUNP9dvOUbkkataBNTtDxYd+p3HwCrk4yxSK5ZaXbaQVQ==
   dependencies:
     "@openzeppelin/contracts" "^5.0.2"
     erc721-lockable "github:filmakarov/erc721-lockable"
@@ -858,9 +858,9 @@ emoji-regex@^8.0.0:
   dependencies:
     "@rari-capital/solmate" "^6.2.0"
 
-"erc721s@https://github.com/filmakarov/erc721-lockable":
+"erc721s@git+https://github.com/filmakarov/erc721-lockable.git":
   version "1.0.0"
-  resolved "https://github.com/filmakarov/erc721-lockable#ea4fb798393d3cf8ce35847bc668a98cee86a718"
+  resolved "git+https://github.com/filmakarov/erc721-lockable.git#ea4fb798393d3cf8ce35847bc668a98cee86a718"
   dependencies:
     "@rari-capital/solmate" "^6.2.0"
 
