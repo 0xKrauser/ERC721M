@@ -28,10 +28,8 @@ interface ICrate721M {
         uint16 royalty_,
         uint16 allocation_,
         address owner_,
-        address alignedNft_,
-        uint256 price_,
-        uint96 vaultId_,
-        bytes32 salt_
+        address alignmentVault_,
+        uint256 price_
     )
         external
         payable;

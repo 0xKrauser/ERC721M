@@ -13,10 +13,8 @@ pragma solidity 0.8.23;
 import {IAlignmentVault} from "./interface/IAlignmentVault.sol";
 
 import {ICrate721M} from "./interface/ICrate721M.sol";
-import {IFactory} from "./interface/IFactory.sol";
 
 import {ERC721Crate} from "@common-resources/crate/contracts/ERC721Crate.sol";
-import {TransferFailed} from "@common-resources/crate/contracts/ICore.sol";
 
 import {ERC20 as tERC20} from "@common-resources/crate/contracts/types/tERC20.sol";
 import {FixedPointMathLib as FPML} from "solady/src/utils/FixedPointMathLib.sol";
@@ -30,8 +28,6 @@ import {LibClone} from "solady/src/utils/LibClone.sol";
  * @notice ERC721 Crate with derivative capabilities
  */
 contract Crate721M is ERC721Crate, ICrate721M {
-    address public constant VAULT_FACTORY = 0x7c1A6B4B373E70730c52dfCB2e0A67E7591d4AAa;
-
     uint16 public minAllocation;
     uint16 public maxAllocation;
 
@@ -48,10 +44,8 @@ contract Crate721M is ERC721Crate, ICrate721M {
         uint16 royalty_, // Percentage in basis points (420 == 4.20%)
         uint16 allocation_, // Minimum Percentage of mint funds sent to AlignmentVault in bps, min. of 5% (777 == 7.77%)
         address owner_, // Collection contract owner
-        address alignedNft_, // Address of NFT to configure AlignmentVault for, must have NFTX vault!
-        uint256 price_, // Price (~1.2M ETH max)
-        uint96 vaultId_, // NFTX Vault ID, please check!
-        bytes32 salt_ // AV Deployment salt
+        address alignmentVault_, // Address of the AlignmentVault contract
+        uint256 price_ // Price (~1.2M ETH max)
     )
         external
         payable
@@ -63,16 +57,8 @@ contract Crate721M is ERC721Crate, ICrate721M {
         minAllocation = allocation_;
         maxAllocation = allocation_;
 
-        // Deploy AlignmentVault
-        address deployedAV;
-        if (salt_ == bytes32("")) deployedAV = IFactory(VAULT_FACTORY).deploy(owner_, alignedNft_, vaultId_);
-        else deployedAV = IFactory(VAULT_FACTORY).deployDeterministic(owner_, alignedNft_, vaultId_, salt_);
-        alignmentVault = deployedAV;
-        // Send initialize payment (if any) to vault
-        if (msg.value > 0) {
-            (bool success,) = payable(deployedAV).call{value: msg.value}("");
-            if (!success) revert TransferFailed();
-        }
+        alignmentVault = alignmentVault_;
+
         emit AlignmentUpdate(allocation_, allocation_);
     }
 

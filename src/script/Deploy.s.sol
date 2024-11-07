@@ -25,10 +25,11 @@ contract FactoryTest is Script {
 
         address alignedNft = 0xeA9aF8dBDdE2A8d3515C3B4E446eCd41afEdB1C6;
         address masterCopy = address(new Crate721M());
-        factory = new SimpleFactory(alignedNft, masterCopy);
+        factory = new SimpleFactory(0xe4542f3537c272279B07573238c8a55AbA506a14, alignedNft, masterCopy);
 
+        /*
         address payable collection1 =
-            payable(factory.createCollection("name", "symbol", 100, 500, 1000, 0.001 ether, 21, bytes32(0), bytes32(0)));
+        payable(factory.createCollection("name", "symbol", 100, 500, 1000, 0.001 ether, 21, bytes32(0), bytes32(0)));
 
         Crate721M collection = Crate721M(collection1);
         collection.unpause();
@@ -65,5 +66,6 @@ contract FactoryTest is Script {
         bytes32[] memory proof = new bytes32[](0);
 
         collection.mint{value: 0.00001 ether}(proof, 1, address(this), 1, address(0));
+        */
     }
 }
