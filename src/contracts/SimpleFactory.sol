@@ -58,24 +58,23 @@ contract SimpleFactory is Ownable {
     {
         if (allocation_ < 1000) revert NotAligned();
 
-        address creator = msg.sender;
         collection_ = LibClone.predictDeterministicAddress(masterCopy, salt_, address(this));
-        emit Crate721MDeployed(collection_, creator);
+        emit Crate721MDeployed(collection_, msg.sender);
         ICrate721M crate721M = ICrate721M(LibClone.cloneDeterministic(masterCopy, salt_));
         if (address(crate721M) != collection_) revert();
 
         // Deploy AlignmentVault
         address deployedAV;
-        if (salt_ == bytes32("")) deployedAV = IFactory(VAULT_FACTORY).deploy(creator, alignedNft, vaultId_);
-        else deployedAV = IFactory(VAULT_FACTORY).deployDeterministic(creator, alignedNft, vaultId_, vaultSalt_);
+        if (salt_ == bytes32("")) deployedAV = IFactory(VAULT_FACTORY).deploy(msg.sender, alignedNft, vaultId_);
+        else deployedAV = IFactory(VAULT_FACTORY).deployDeterministic(msg.sender, alignedNft, vaultId_, vaultSalt_);
+
+        crate721M.initialize(name_, symbol_, maxSupply_, royalty_, allocation_, msg.sender, deployedAV, price_);
 
         // Send initialize payment (if any) to vault
         if (msg.value > 0) {
             (bool success,) = payable(deployedAV).call{value: msg.value}("");
             if (!success) revert TransferFailed();
         }
-
-        crate721M.initialize(name_, symbol_, maxSupply_, royalty_, allocation_, creator, deployedAV, price_);
     }
 
     /**
